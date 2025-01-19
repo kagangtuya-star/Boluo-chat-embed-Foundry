@@ -1,0 +1,30 @@
+{
+  "id": "Boluo-chat-embed",
+  "title": "菠萝文字团工具嵌入",
+  "description": "这个模组可以把菠萝跑团作为一个右侧控件栏嵌入，并提供右键悬浮功能。",
+  "authors": [
+    {
+      "name": "星尘"
+    }
+  ],
+  "version": "1.0.0",
+  "compatibility": {
+    "minimum": "10",
+    "verified": "12.331"
+  },
+  "socket": "true",
+  "languages": [],
+  "styles": [
+    "styles/module.css"
+  ],
+  "esmodules": [
+    "scripts/MainUI.js"
+  ],
+  "url": "#{URL}#",
+  "manifest": "#{MANIFEST}#",
+  "download": "#{DOWNLOAD}#",
+  "license": "LICENSE",
+  "readme": "README.md",
+  "bugs": "#{URL}#/issues",
+  "allowBugReporter": true
+}
