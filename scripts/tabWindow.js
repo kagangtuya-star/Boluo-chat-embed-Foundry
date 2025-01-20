@@ -20,11 +20,11 @@ export class tabWindow extends Application {
         return {
             ...super.defaultOptions,
             classes: ["sidebar-popout"],
-            id: "notebook-popout",
+            id: "boluo-chat-popout",
             popOut: true,
             width: 360,
             height: 700,
-            template: `modules/notebook/templates/default.html`,
+            template: `modules/Boluo-chat-embed/templates/default.html`,
             jQuery: true,
             title: "菠萝聊天",
             resizable: true
