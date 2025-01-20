@@ -65,7 +65,7 @@ class Notes extends SidebarTab {
 		iframe.style.border = "none";
 		iframe.style.width = "100%";
 		iframe.style.height = "100%";
-		iframe.setAttribute("sandbox", "allow-scripts allow-same-origin");
+		// iframe.setAttribute("sandbox", "allow-scripts allow-same-origin");
 		// this.options.tab.empty();
 		this.options.tab.append(iframe);
 	}
