@@ -10,7 +10,7 @@
   "version": "1.0.3",
   "compatibility": {
     "minimum": "10",
-    "verified": "12.331"
+    "verified": "13"
   },
   "socket": "true",
   "languages": [],
