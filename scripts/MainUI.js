@@ -10,6 +10,8 @@ const SIDEBAR_ARIA_LABEL = "菠萝聊天";
 const SIDEBAR_WIDE_CLASS = "boluo-sidebar-wide";
 const SIDEBAR_CONTAINER_ID = "ui-right";
 const MOBILE_MODE_PARAM_KEY = "mobile";
+const EMBED_IFRAME_CLASS = "boluo-chat-iframe";
+const EMBED_IFRAME_READY_CLASS = "boluo-iframe-ready";
 
 let sharedPanel = null;
 let panelPlaceholder = null;
@@ -431,6 +433,17 @@ function getEmbeddedUrl(options = {}) {
 }
 
 /**
+ * 切换 iframe 的加载态样式，避免重载期间出现白屏闪烁
+ * @param {HTMLIFrameElement} iframe
+ * @param {boolean} isLoading
+ */
+function setIframeLoadingState(iframe, isLoading) {
+	if (!iframe) return;
+	iframe.classList.add(EMBED_IFRAME_CLASS);
+	iframe.classList.toggle(EMBED_IFRAME_READY_CLASS, !isLoading);
+}
+
+/**
  * 创建 iframe 节点，保持 Foundry UI 样式一致
  * @param {string} elementId
  * @returns {HTMLIFrameElement}
@@ -458,6 +471,10 @@ function createEmbeddedIframe(elementId) {
 	iframe.setAttribute("allow", allowFeatures);
 	iframe.referrerPolicy = "strict-origin-when-cross-origin";
 	iframe.setAttribute("allowtransparency", "true");
+	setIframeLoadingState(iframe, true);
+	iframe.addEventListener("load", () => {
+		setIframeLoadingState(iframe, false);
+	});
 	return iframe;
 }
 
@@ -483,6 +500,7 @@ function refreshEmbeddedFrames(options = {}) {
 	const shouldReload = forceReload || isFirstLoad || baseUrlChanged;
 
 	if (shouldReload && iframe.getAttribute("src") !== targetUrl) {
+		setIframeLoadingState(iframe, true);
 		iframe.src = targetUrl;
 	}
 

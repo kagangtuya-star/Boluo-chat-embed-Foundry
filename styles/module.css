@@ -25,3 +25,19 @@
 	display: block;
 	width: 100% !important;
 }
+
+#boluo-chat-popout .window-content,
+#boluo-chat-popout .window-content .content {
+	overflow: hidden !important;
+	padding: 0;
+}
+
+iframe.boluo-chat-iframe {
+	background: rgba(45, 45, 49, 0.28);
+	opacity: 0;
+	transition: opacity 0.18s ease;
+}
+
+iframe.boluo-chat-iframe.boluo-iframe-ready {
+	opacity: 1;
+}

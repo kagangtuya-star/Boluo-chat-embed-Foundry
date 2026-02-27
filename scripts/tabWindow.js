@@ -2,6 +2,8 @@
 // https://github.com/Saibot393/notebook/blob/2a6052267ea81d72fbd304b7a08a2e7b70d6182a/scripts/helpers/tabWindow.js
 const SIDEBAR_TAB_ID = "boluo-chat";
 const POPOUT_IFRAME_ID = "boluo-chat-popout-iframe";
+const EMBED_IFRAME_CLASS = "boluo-chat-iframe";
+const EMBED_IFRAME_READY_CLASS = "boluo-iframe-ready";
 
 function createPopoutIframe(src) {
 	const iframe = document.createElement("iframe");
@@ -17,6 +19,10 @@ function createPopoutIframe(src) {
 		"allow",
 		"accelerometer; autoplay; camera; clipboard-read; clipboard-write; encrypted-media; fullscreen; geolocation; microphone; storage-access-by-user-activation"
 	);
+	iframe.classList.add(EMBED_IFRAME_CLASS);
+	iframe.addEventListener("load", () => {
+		iframe.classList.add(EMBED_IFRAME_READY_CLASS);
+	});
 	iframe.src = src;
 	return iframe;
 }
