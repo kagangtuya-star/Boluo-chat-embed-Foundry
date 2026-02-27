@@ -1,13 +1,27 @@
 // import { cModuleName, Translate } from "../utils/utils.js";
 // https://github.com/Saibot393/notebook/blob/2a6052267ea81d72fbd304b7a08a2e7b70d6182a/scripts/helpers/tabWindow.js
 const SIDEBAR_TAB_ID = "boluo-chat";
+const POPOUT_IFRAME_ID = "boluo-chat-popout-iframe";
+
+function createPopoutIframe(src) {
+	const iframe = document.createElement("iframe");
+	iframe.id = POPOUT_IFRAME_ID;
+	iframe.style.border = "none";
+	iframe.style.width = "100%";
+	iframe.style.height = "100%";
+	iframe.setAttribute("loading", "lazy");
+	iframe.allowFullscreen = true;
+	iframe.referrerPolicy = "strict-origin-when-cross-origin";
+	iframe.setAttribute("allowtransparency", "true");
+	iframe.setAttribute(
+		"allow",
+		"accelerometer; autoplay; camera; clipboard-read; clipboard-write; encrypted-media; fullscreen; geolocation; microphone; storage-access-by-user-activation"
+	);
+	iframe.src = src;
+	return iframe;
+}
 
 export class tabWindow extends Application {
-	constructor(pOptions = {}) {
-		super(pOptions);
-		this._panel = null;
-	}
-
 	get header() {
 		return this._element[0].querySelector("header");
 	}
@@ -36,20 +50,10 @@ export class tabWindow extends Application {
 		await super._render(pforce, pOptions);
 
 		window.BoluoChatEmbed?.ensureSidebarElements?.();
-
-		const detach = window.BoluoChatEmbed?.detachSidebarPanel;
-		this._panel = detach ? detach() : null;
-		if (this._panel) {
-			this._panel.classList.add("boluo-chat-popout-panel");
-			this._panel.style.flex = "1 1 auto";
-			this._panel.style.height = "100%";
-			this._panel.style.width = "100%";
-			this.body.replaceChildren(this._panel);
-		} else {
-			this.body.innerHTML = "";
-		}
-
-		window.BoluoChatEmbed?.refreshEmbeddedFrames?.();
+		const popoutSrc =
+			window.BoluoChatEmbed?.getEmbeddedUrl?.({ mobileMode: true }) ??
+			"https://app.boluo.chat/zh-CN";
+		this.body.replaceChildren(createPopoutIframe(popoutSrc));
 
 		const navItem =
 			window.BoluoChatEmbed?.findTabButton?.(SIDEBAR_TAB_ID) ??
@@ -75,13 +79,6 @@ export class tabWindow extends Application {
 		}
 		window.BoluoChatEmbed?.syncSidebarWidthState?.();
 
-		if (this._panel) {
-			this._panel.classList.remove("boluo-chat-popout-panel");
-			window.BoluoChatEmbed?.restoreSidebarPanel?.(this._panel);
-			this._panel = null;
-		}
-
-		window.BoluoChatEmbed?.refreshEmbeddedFrames?.();
 		window.BoluoChatEmbed?.ensureSidebarElements?.();
 
 		return super.close(options);

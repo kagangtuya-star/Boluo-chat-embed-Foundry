@@ -25,7 +25,7 @@ async function registerSettings() {
 		config: true,
 		type: String,
 		default: "https://app.boluo.chat/zh-CN",
-		onChange: () => refreshEmbeddedFrames()
+		onChange: () => refreshEmbeddedFrames({ forceReload: true })
 	});
 
 	if (!game.settings.settings.has(`${LEGACY_NAMESPACE}.${CONFIG_KEY}`)) {
@@ -156,8 +156,6 @@ function syncSidebarWidthState(root = getSidebarRoot()) {
 
 	const container = getSidebarContainer(root);
 	container?.classList.toggle(SIDEBAR_WIDE_CLASS, shouldWide);
-
-	refreshEmbeddedFrames({ mobileMode: shouldWide });
 }
 
 /**
@@ -465,12 +463,12 @@ function createEmbeddedIframe(elementId) {
 
 /**
  * 同步刷新侧栏与弹窗 iframe 地址
- * 仅在首次加载、设置地址变更或首次切换到移动端模式时重载，避免频繁白屏刷新
+ * 仅在首次加载、设置地址变更时重载，避免切换标签或弹窗开关导致白屏刷新
  * @param {{mobileMode?: boolean, forceReload?: boolean}} [options]
  */
 function refreshEmbeddedFrames(options = {}) {
 	const {
-		mobileMode = isBoluoTabActive(getSidebarRoot()),
+		mobileMode = true,
 		forceReload = false
 	} = options;
 	const panel = getSidebarPanel();
@@ -482,8 +480,7 @@ function refreshEmbeddedFrames(options = {}) {
 	const targetUrl = getEmbeddedUrl({ mobileMode });
 	const isFirstLoad = !iframe.getAttribute("src");
 	const baseUrlChanged = iframe.dataset.boluoBaseUrl !== baseUrl;
-	const needsMobileUpgrade = mobileMode && iframe.dataset.boluoMobileSession !== "true";
-	const shouldReload = forceReload || isFirstLoad || baseUrlChanged || needsMobileUpgrade;
+	const shouldReload = forceReload || isFirstLoad || baseUrlChanged;
 
 	if (shouldReload && iframe.getAttribute("src") !== targetUrl) {
 		iframe.src = targetUrl;
