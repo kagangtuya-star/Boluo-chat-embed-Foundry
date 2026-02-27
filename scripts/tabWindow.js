@@ -4,6 +4,7 @@ const SIDEBAR_TAB_ID = "boluo-chat";
 const POPOUT_IFRAME_ID = "boluo-chat-popout-iframe";
 const EMBED_IFRAME_CLASS = "boluo-chat-iframe";
 const EMBED_IFRAME_READY_CLASS = "boluo-iframe-ready";
+const DEFAULT_POPOUT_TITLE = "菠萝聊天";
 
 function createPopoutIframe(src) {
 	const iframe = document.createElement("iframe");
@@ -47,13 +48,17 @@ export class tabWindow extends Application {
 			height: 700,
 			template: `modules/Boluo-chat-embed/templates/default.html`,
 			jQuery: true,
-			title: "菠萝聊天",
+			title: window.BoluoChatEmbed?.getTabTitle?.() ?? DEFAULT_POPOUT_TITLE,
 			resizable: true
 		};
 	}
 
 	async _render(pforce = false, pOptions = {}) {
 		await super._render(pforce, pOptions);
+		const popoutTitle = window.BoluoChatEmbed?.getTabTitle?.() ?? DEFAULT_POPOUT_TITLE;
+		this.options.title = popoutTitle;
+		const titleElement = this._element?.[0]?.querySelector(".window-title");
+		if (titleElement) titleElement.textContent = popoutTitle;
 
 		window.BoluoChatEmbed?.ensureSidebarElements?.();
 		const popoutSrc =

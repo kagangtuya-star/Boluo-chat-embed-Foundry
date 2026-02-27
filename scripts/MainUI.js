@@ -1,17 +1,22 @@
 import { tabWindow } from "./tabWindow.js";
 
-const cNoteIcon = "fa-lemon";
 const MODULE_NAMESPACE = "Boluo-chat-embed";
 const LEGACY_NAMESPACE = "embedded-webpage";
-const CONFIG_KEY = "embeddedUrl";
+const EMBEDDED_URL_CONFIG_KEY = "embeddedUrl";
+const TAB_TITLE_CONFIG_KEY = "tabTitle";
+const TAB_ICON_CONFIG_KEY = "tabIcon";
 const SIDEBAR_TAB_ID = "boluo-chat";
 const SIDEBAR_IFRAME_ID = "boluo-chat-sidebar-iframe";
-const SIDEBAR_ARIA_LABEL = "菠萝聊天";
 const SIDEBAR_WIDE_CLASS = "boluo-sidebar-wide";
 const SIDEBAR_CONTAINER_ID = "ui-right";
 const MOBILE_MODE_PARAM_KEY = "mobile";
 const EMBED_IFRAME_CLASS = "boluo-chat-iframe";
 const EMBED_IFRAME_READY_CLASS = "boluo-iframe-ready";
+const DEFAULT_EMBEDDED_URL = "https://app.boluo.chat/zh-CN";
+const DEFAULT_TAB_TITLE = "菠萝聊天";
+const DEFAULT_TAB_ICON = "fa-lemon";
+const ICON_STYLE_CLASSES = new Set(["fa-solid", "fa-regular", "fa-brands", "fa-light", "fa-thin", "fa-duotone"]);
+const ICON_MODIFIER_CLASSES = new Set(["fa-fw", "fa-spin", "fa-pulse", "fa-border", "fa-inverse", "fa-ul", "fa-li"]);
 
 let sharedPanel = null;
 let panelPlaceholder = null;
@@ -20,31 +25,51 @@ let panelPlaceholder = null;
  * 注册模块设置，并兼容历史命名空间
  */
 async function registerSettings() {
-	game.settings.register(MODULE_NAMESPACE, CONFIG_KEY, {
+	game.settings.register(MODULE_NAMESPACE, EMBEDDED_URL_CONFIG_KEY, {
 		name: "嵌入网页地址（菠萝频道）",
 		hint: "请输入要嵌入到右侧选项卡中的网页地址。",
 		scope: "world",
 		config: true,
 		type: String,
-		default: "https://app.boluo.chat/zh-CN",
+		default: DEFAULT_EMBEDDED_URL,
 		onChange: () => refreshEmbeddedFrames({ forceReload: true })
 	});
 
-	if (!game.settings.settings.has(`${LEGACY_NAMESPACE}.${CONFIG_KEY}`)) {
-		game.settings.register(LEGACY_NAMESPACE, CONFIG_KEY, {
+	game.settings.register(MODULE_NAMESPACE, TAB_TITLE_CONFIG_KEY, {
+		name: "标签标题",
+		hint: "侧栏按钮提示与弹窗标题。",
+		scope: "world",
+		config: true,
+		type: String,
+		default: DEFAULT_TAB_TITLE,
+		onChange: () => updateTabPresentation()
+	});
+
+	game.settings.register(MODULE_NAMESPACE, TAB_ICON_CONFIG_KEY, {
+		name: "标签图标",
+		hint: "请输入 Font Awesome 图标类名，例如 fa-lemon 或 fa-solid fa-lemon。",
+		scope: "world",
+		config: true,
+		type: String,
+		default: DEFAULT_TAB_ICON,
+		onChange: () => updateTabPresentation()
+	});
+
+	if (!game.settings.settings.has(`${LEGACY_NAMESPACE}.${EMBEDDED_URL_CONFIG_KEY}`)) {
+		game.settings.register(LEGACY_NAMESPACE, EMBEDDED_URL_CONFIG_KEY, {
 			scope: "world",
 			config: false,
 			type: String,
-			default: "https://app.boluo.chat/zh-CN"
+			default: DEFAULT_EMBEDDED_URL
 		});
 	}
 
 	const storage = game.settings.storage.get("world");
-	const legacyKey = `${LEGACY_NAMESPACE}.${CONFIG_KEY}`;
-	const currentKey = `${MODULE_NAMESPACE}.${CONFIG_KEY}`;
+	const legacyKey = `${LEGACY_NAMESPACE}.${EMBEDDED_URL_CONFIG_KEY}`;
+	const currentKey = `${MODULE_NAMESPACE}.${EMBEDDED_URL_CONFIG_KEY}`;
 	if (storage?.has(legacyKey) && !storage.has(currentKey)) {
-		const legacyValue = game.settings.get(LEGACY_NAMESPACE, CONFIG_KEY);
-		await game.settings.set(MODULE_NAMESPACE, CONFIG_KEY, legacyValue);
+		const legacyValue = game.settings.get(LEGACY_NAMESPACE, EMBEDDED_URL_CONFIG_KEY);
+		await game.settings.set(MODULE_NAMESPACE, EMBEDDED_URL_CONFIG_KEY, legacyValue);
 	}
 }
 
@@ -136,6 +161,101 @@ function getSidebarPanel() {
 	const panel = document.getElementById(SIDEBAR_TAB_ID);
 	if (panel) sharedPanel = panel;
 	return sharedPanel;
+}
+
+/**
+ * 读取字符串设置，异常时回退默认值
+ * @param {string} key
+ * @param {string} fallback
+ * @returns {string}
+ */
+function getStringSetting(key, fallback) {
+	try {
+		const value = game.settings.get(MODULE_NAMESPACE, key);
+		if (typeof value !== "string") return fallback;
+		const normalized = value.trim();
+		return normalized || fallback;
+	} catch (_error) {
+		return fallback;
+	}
+}
+
+/**
+ * 获取配置后的标签标题
+ * @returns {string}
+ */
+function getTabTitle() {
+	return getStringSetting(TAB_TITLE_CONFIG_KEY, DEFAULT_TAB_TITLE);
+}
+
+/**
+ * 获取配置后的标签图标 classes
+ * @returns {string[]}
+ */
+function getTabIconClasses() {
+	const rawIcon = getStringSetting(TAB_ICON_CONFIG_KEY, DEFAULT_TAB_ICON);
+	const tokens = rawIcon.split(/\s+/).filter(Boolean);
+	if (!tokens.length) return ["fa-solid", DEFAULT_TAB_ICON];
+
+	if (tokens.length === 1) {
+		const iconToken = tokens[0];
+		if (/^fa-[a-z0-9-]+$/i.test(iconToken) && !ICON_STYLE_CLASSES.has(iconToken)) {
+			return ["fa-solid", iconToken];
+		}
+		return ["fa-solid", DEFAULT_TAB_ICON];
+	}
+
+	const hasStyleClass = tokens.some(token => ICON_STYLE_CLASSES.has(token));
+	const hasIconClass = tokens.some(token =>
+		/^fa-[a-z0-9-]+$/i.test(token) &&
+		!ICON_STYLE_CLASSES.has(token) &&
+		!ICON_MODIFIER_CLASSES.has(token) &&
+		!token.startsWith("fa-rotate-") &&
+		!token.startsWith("fa-flip-")
+	);
+	const result = Array.from(new Set(tokens.filter(token => /^fa-[a-z0-9-]+$/i.test(token))));
+	if (!hasStyleClass) result.unshift("fa-solid");
+	if (!hasIconClass) result.push(DEFAULT_TAB_ICON);
+	return Array.from(new Set(result));
+}
+
+/**
+ * 同步按钮和面板的显示文本/图标
+ * @param {{button?: HTMLElement | null, panel?: HTMLElement | null}} [options]
+ */
+function updateTabPresentation(options = {}) {
+	const {
+		button = findTabButton(SIDEBAR_TAB_ID, getSidebarRoot()),
+		panel = getSidebarPanel()
+	} = options;
+	const tabTitle = getTabTitle();
+	const tabIconClasses = getTabIconClasses();
+
+	if (button) {
+		button.setAttribute("data-tooltip", tabTitle);
+		button.setAttribute("aria-label", tabTitle);
+		button.title = tabTitle;
+
+		let icon = button.querySelector("i");
+		if (!icon) {
+			icon = document.createElement("i");
+			button.replaceChildren(icon);
+		}
+		icon.className = "";
+		icon.classList.add(...tabIconClasses);
+		icon.setAttribute("aria-hidden", "true");
+	}
+
+	if (panel) {
+		panel.setAttribute("aria-label", tabTitle);
+	}
+
+	const popout = window.BoluoChatEmbed?.popoutInstance;
+	if (popout?.rendered) {
+		popout.options.title = tabTitle;
+		const titleElement = popout._element?.[0]?.querySelector(".window-title");
+		if (titleElement) titleElement.textContent = tabTitle;
+	}
 }
 
 /**
@@ -285,17 +405,11 @@ function createTabButton(nav) {
 	button.setAttribute("data-group", button.dataset.group);
 	button.setAttribute("data-tab-group", button.dataset.group);
 	button.setAttribute("aria-controls", SIDEBAR_TAB_ID);
-	button.setAttribute("data-tooltip", SIDEBAR_ARIA_LABEL);
-	button.title = SIDEBAR_ARIA_LABEL;
 	if (!button.getAttribute("role")) button.setAttribute("role", "tab");
 	if (button.tagName === "BUTTON" && !button.getAttribute("type")) button.setAttribute("type", "button");
 	button.classList.add("boluo-sidebar-button");
 
-	button.replaceChildren();
-	const icon = document.createElement("i");
-	icon.classList.add("fa-solid", cNoteIcon);
-	icon.setAttribute("aria-hidden", "true");
-	button.appendChild(icon);
+	updateTabPresentation({ button });
 
 	button.addEventListener("contextmenu", event => {
 		event.preventDefault();
@@ -351,7 +465,7 @@ function ensureTabPanel(root = getSidebarRoot()) {
 	panel.id = SIDEBAR_TAB_ID;
 	panel.dataset.tab = SIDEBAR_TAB_ID;
 	panel.setAttribute("role", "tabpanel");
-	panel.setAttribute("aria-label", SIDEBAR_ARIA_LABEL);
+	panel.setAttribute("aria-label", getTabTitle());
 	panel.classList.add("tab", "sidebar-tab", "directory", "flexcol");
 	panel.style.border = "none";
 	panel.style.width = "100%";
@@ -444,6 +558,7 @@ function ensureSidebarElements(root = getSidebarRoot()) {
 
 	const panel = ensureTabPanel(root);
 	if (!panel) return;
+	updateTabPresentation({ button, panel });
 	const groupValue = button.dataset.group ?? "primary";
 	panel.dataset.group = groupValue;
 	panel.setAttribute("data-group", groupValue);
@@ -463,16 +578,16 @@ function getEmbeddedUrl(options = {}) {
 	const { mobileMode = false } = options;
 	let rawUrl = "";
 	try {
-		rawUrl = game.settings.get(MODULE_NAMESPACE, CONFIG_KEY);
+		rawUrl = game.settings.get(MODULE_NAMESPACE, EMBEDDED_URL_CONFIG_KEY);
 	} catch (error) {
 		console.warn(`[${MODULE_NAMESPACE}] 读取设置失败，使用默认地址。`, error);
 	}
 
-	if ((!rawUrl || rawUrl === "undefined") && game.settings.settings.has(`${LEGACY_NAMESPACE}.${CONFIG_KEY}`)) {
-		rawUrl = game.settings.get(LEGACY_NAMESPACE, CONFIG_KEY);
+	if ((!rawUrl || rawUrl === "undefined") && game.settings.settings.has(`${LEGACY_NAMESPACE}.${EMBEDDED_URL_CONFIG_KEY}`)) {
+		rawUrl = game.settings.get(LEGACY_NAMESPACE, EMBEDDED_URL_CONFIG_KEY);
 	}
 
-	if (!rawUrl) rawUrl = "https://app.boluo.chat/zh-CN";
+	if (!rawUrl) rawUrl = DEFAULT_EMBEDDED_URL;
 	const baseUrl = decodeURIComponent(rawUrl);
 	if (!mobileMode) return baseUrl;
 
@@ -578,7 +693,8 @@ Hooks.once("init", async () => {
 		syncSidebarWidthState,
 		detachSidebarPanel,
 		restoreSidebarPanel,
-		getSidebarPanel
+		getSidebarPanel,
+		getTabTitle
 	});
 });
 
