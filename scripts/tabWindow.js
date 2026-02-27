@@ -60,6 +60,7 @@ export class tabWindow extends Application {
 		} else if (typeof ui.sidebar.changeTab === "function") {
 			ui.sidebar.changeTab("chat", "primary", { force: true });
 		}
+		window.BoluoChatEmbed?.syncSidebarWidthState?.();
 	}
 
 	async close(options = {}) {
@@ -72,6 +73,7 @@ export class tabWindow extends Application {
 		} else if (typeof ui.sidebar.changeTab === "function") {
 			ui.sidebar.changeTab(SIDEBAR_TAB_ID, "primary", { force: true });
 		}
+		window.BoluoChatEmbed?.syncSidebarWidthState?.();
 
 		if (this._panel) {
 			this._panel.classList.remove("boluo-chat-popout-panel");

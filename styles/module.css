@@ -1,3 +1,27 @@
-#sidebar {
-    width: 365px !important;
+#sidebar.boluo-sidebar-wide,
+#ui-right.boluo-sidebar-wide #sidebar {
+	--boluo-sidebar-width: 400px;
+	--sidebar-width: var(--boluo-sidebar-width);
+}
+
+#sidebar.boluo-sidebar-wide:not(.collapsed),
+#ui-right.boluo-sidebar-wide #sidebar:not(.collapsed),
+#ui-right.boluo-sidebar-wide .sidebar:not(.collapsed) {
+	width: var(--boluo-sidebar-width) !important;
+	flex: 0 0 var(--boluo-sidebar-width) !important;
+	min-width: var(--boluo-sidebar-width);
+	max-width: var(--boluo-sidebar-width);
+}
+
+#sidebar.boluo-sidebar-wide #boluo-chat,
+#ui-right.boluo-sidebar-wide #sidebar #boluo-chat {
+	padding: 0 !important;
+	width: 100% !important;
+	max-width: 100% !important;
+}
+
+#sidebar.boluo-sidebar-wide #boluo-chat iframe,
+#ui-right.boluo-sidebar-wide #sidebar #boluo-chat iframe {
+	display: block;
+	width: 100% !important;
 }

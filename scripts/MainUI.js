@@ -7,6 +7,9 @@ const CONFIG_KEY = "embeddedUrl";
 const SIDEBAR_TAB_ID = "boluo-chat";
 const SIDEBAR_IFRAME_ID = "boluo-chat-sidebar-iframe";
 const SIDEBAR_ARIA_LABEL = "菠萝聊天";
+const SIDEBAR_WIDE_CLASS = "boluo-sidebar-wide";
+const SIDEBAR_CONTAINER_ID = "ui-right";
+const MOBILE_MODE_PARAM_KEY = "mobile";
 
 let sharedPanel = null;
 let panelPlaceholder = null;
@@ -66,6 +69,17 @@ function getSidebarRoot() {
 }
 
 /**
+ * 获取侧边栏外层容器（v13 通常是 #ui-right）
+ * @param {HTMLElement} [root]
+ * @returns {HTMLElement | null}
+ */
+function getSidebarContainer(root = getSidebarRoot()) {
+	if (!root) return null;
+	if (root.parentElement?.id === SIDEBAR_CONTAINER_ID) return root.parentElement;
+	return document.getElementById(SIDEBAR_CONTAINER_ID);
+}
+
+/**
  * 查找侧栏主导航节点
  * @param {HTMLElement} root
  * @returns {HTMLElement | null}
@@ -101,6 +115,80 @@ function getSidebarPanel() {
 	const panel = document.getElementById(SIDEBAR_TAB_ID);
 	if (panel) sharedPanel = panel;
 	return sharedPanel;
+}
+
+/**
+ * 判断当前是否激活了模块侧栏标签
+ * @param {HTMLElement} [root]
+ * @returns {boolean}
+ */
+function isBoluoTabActive(root = getSidebarRoot()) {
+	const nav = findPrimaryNav(root);
+	const selectedButton = nav?.querySelector?.(
+		"[data-tab].active, [data-tab][aria-selected='true'], [data-tab][data-state='active']"
+	);
+
+	const selectedTabId =
+		selectedButton?.dataset.tab ??
+		selectedButton?.getAttribute("data-tab") ??
+		ui.sidebar?.activeTab ??
+		ui.sidebar?.tabGroups?.primary;
+
+	if (selectedTabId) return selectedTabId === SIDEBAR_TAB_ID;
+
+	const boluoButton = findTabButton(SIDEBAR_TAB_ID, root);
+	return (
+		boluoButton?.classList.contains("active") ||
+		boluoButton?.getAttribute("aria-selected") === "true" ||
+		boluoButton?.getAttribute("data-state") === "active"
+	);
+}
+
+/**
+ * 根据当前激活标签同步侧边栏宽度状态
+ * @param {HTMLElement} [root]
+ */
+function syncSidebarWidthState(root = getSidebarRoot()) {
+	if (!root) return;
+	const isCollapsed = Boolean(ui.sidebar?.collapsed) || root.classList.contains("collapsed");
+	const shouldWide = isBoluoTabActive(root) && !isCollapsed;
+	root.classList.toggle(SIDEBAR_WIDE_CLASS, shouldWide);
+
+	const container = getSidebarContainer(root);
+	container?.classList.toggle(SIDEBAR_WIDE_CLASS, shouldWide);
+
+	refreshEmbeddedFrames({ mobileMode: shouldWide });
+}
+
+/**
+ * 绑定侧边栏状态观察器，用于跟踪激活标签与折叠状态变化
+ * @param {HTMLElement} root
+ */
+function ensureSidebarStateObserver(root) {
+	if (!root || root.__boluoStateObserver) return;
+
+	const observer = new MutationObserver(() => {
+		syncSidebarWidthState(root);
+	});
+	observer.observe(root, {
+		subtree: true,
+		attributes: true,
+		attributeFilter: ["class", "aria-selected"]
+	});
+
+	root.__boluoStateObserver = observer;
+
+	const container = getSidebarContainer(root);
+	if (container && !container.__boluoStateObserver) {
+		const containerObserver = new MutationObserver(() => {
+			syncSidebarWidthState(root);
+		});
+		containerObserver.observe(container, {
+			attributes: true,
+			attributeFilter: ["class"]
+		});
+		container.__boluoStateObserver = containerObserver;
+	}
 }
 
 /**
@@ -165,6 +253,9 @@ function createTabButton(nav) {
 		}
 		window.BoluoChatEmbed.popoutInstance.render(true);
 	});
+	button.addEventListener("click", () => {
+		requestAnimationFrame(() => syncSidebarWidthState());
+	});
 
 	return button;
 }
@@ -214,7 +305,7 @@ function ensureTabPanel(root = getSidebarRoot()) {
 	if (isAtLeastV13()) {
 		panel.style.background = "var(--sidebar-background, var(--color-cool-5-90))";
 		panel.style.color = "var(--color-text-primary, #1f2933)";
-		panel.style.padding = "var(--sidebar-tab-padding, 0)";
+		panel.style.padding = "0";
 	}
 
 	panel.appendChild(createEmbeddedIframe(SIDEBAR_IFRAME_ID));
@@ -284,6 +375,7 @@ function ensureSidebarElements(root = getSidebarRoot()) {
 
 	const nav = findPrimaryNav(root);
 	if (!nav) return;
+	ensureSidebarStateObserver(root);
 
 	let button = findTabButton(SIDEBAR_TAB_ID, root);
 	if (!button) {
@@ -304,13 +396,17 @@ function ensureSidebarElements(root = getSidebarRoot()) {
 	panel.setAttribute("data-tab-group", groupValue);
 
 	refreshEmbeddedFrames();
+	syncSidebarWidthState(root);
 }
 
 /**
  * 获取解码后的嵌入地址
+ * 说明：浏览器环境无法真正覆写 iframe 的 UA，这里通过 URL 参数触发移动端分支
+ * @param {{mobileMode?: boolean}} [options]
  * @returns {string}
  */
-function getEmbeddedUrl() {
+function getEmbeddedUrl(options = {}) {
+	const { mobileMode = false } = options;
 	let rawUrl = "";
 	try {
 		rawUrl = game.settings.get(MODULE_NAMESPACE, CONFIG_KEY);
@@ -323,7 +419,17 @@ function getEmbeddedUrl() {
 	}
 
 	if (!rawUrl) rawUrl = "https://app.boluo.chat/zh-CN";
-	return decodeURIComponent(rawUrl);
+	const baseUrl = decodeURIComponent(rawUrl);
+	if (!mobileMode) return baseUrl;
+
+	try {
+		const parsedUrl = new URL(baseUrl, window.location.origin);
+		parsedUrl.searchParams.set(MOBILE_MODE_PARAM_KEY, "1");
+		return parsedUrl.toString();
+	} catch (_error) {
+		const separator = baseUrl.includes("?") ? "&" : "?";
+		return `${baseUrl}${separator}${MOBILE_MODE_PARAM_KEY}=1`;
+	}
 }
 
 /**
@@ -359,14 +465,21 @@ function createEmbeddedIframe(elementId) {
 
 /**
  * 同步刷新侧栏与弹窗 iframe 地址
+ * @param {{mobileMode?: boolean}} [options]
  */
-function refreshEmbeddedFrames() {
-	const embeddedUrl = getEmbeddedUrl();
+function refreshEmbeddedFrames(options = {}) {
+	const {
+		mobileMode = isBoluoTabActive(getSidebarRoot())
+	} = options;
+	const embeddedUrl = getEmbeddedUrl({ mobileMode });
 	const panel = getSidebarPanel();
 	const iframe =
 		panel?.querySelector?.(`#${SIDEBAR_IFRAME_ID}`) ?? document.getElementById(SIDEBAR_IFRAME_ID);
 	if (iframe && iframe.getAttribute("src") !== embeddedUrl) {
 		iframe.src = embeddedUrl;
+	}
+	if (iframe) {
+		iframe.dataset.boluoMobileUa = mobileMode ? "true" : "false";
 	}
 }
 
@@ -379,6 +492,7 @@ Hooks.once("init", async () => {
 		getSidebarRoot,
 		findTabButton,
 		ensureSidebarElements,
+		syncSidebarWidthState,
 		detachSidebarPanel,
 		restoreSidebarPanel,
 		getSidebarPanel
@@ -396,5 +510,9 @@ Hooks.once("ready", async () => {
 			element?.[0] instanceof HTMLElement ? element[0] :
 			getSidebarRoot();
 		ensureSidebarElements(domElement);
+	});
+
+	Hooks.on("collapseSidebar", () => {
+		syncSidebarWidthState();
 	});
 });
