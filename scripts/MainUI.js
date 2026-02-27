@@ -109,6 +109,25 @@ function findTabButton(tabId, root = getSidebarRoot()) {
 }
 
 /**
+ * 获取当前激活标签 ID
+ * @param {HTMLElement} [root]
+ * @returns {string | null}
+ */
+function getActiveSidebarTabId(root = getSidebarRoot()) {
+	const nav = findPrimaryNav(root);
+	const selectedButton = nav?.querySelector?.(
+		"[data-tab].active, [data-tab][aria-selected='true'], [data-tab][data-state='active']"
+	);
+	return (
+		selectedButton?.dataset.tab ??
+		selectedButton?.getAttribute("data-tab") ??
+		ui.sidebar?.activeTab ??
+		ui.sidebar?.tabGroups?.primary ??
+		null
+	);
+}
+
+/**
  * 获取模块侧栏面板节点
  * @returns {HTMLElement | null}
  */
@@ -125,16 +144,7 @@ function getSidebarPanel() {
  * @returns {boolean}
  */
 function isBoluoTabActive(root = getSidebarRoot()) {
-	const nav = findPrimaryNav(root);
-	const selectedButton = nav?.querySelector?.(
-		"[data-tab].active, [data-tab][aria-selected='true'], [data-tab][data-state='active']"
-	);
-
-	const selectedTabId =
-		selectedButton?.dataset.tab ??
-		selectedButton?.getAttribute("data-tab") ??
-		ui.sidebar?.activeTab ??
-		ui.sidebar?.tabGroups?.primary;
+	const selectedTabId = getActiveSidebarTabId(root);
 
 	if (selectedTabId) return selectedTabId === SIDEBAR_TAB_ID;
 
@@ -144,6 +154,47 @@ function isBoluoTabActive(root = getSidebarRoot()) {
 		boluoButton?.getAttribute("aria-selected") === "true" ||
 		boluoButton?.getAttribute("data-state") === "active"
 	);
+}
+
+/**
+ * 可靠激活侧栏标签，兼容 v10-v13 与主题自定义
+ * @param {string} tabId
+ * @param {{root?: HTMLElement, defer?: boolean, fallbackClick?: boolean}} [options]
+ */
+function activateSidebarTab(tabId, options = {}) {
+	const {
+		root = getSidebarRoot(),
+		defer = false,
+		fallbackClick = true
+	} = options;
+
+	const run = () => {
+		const currentRoot = root?.isConnected ? root : getSidebarRoot();
+		const button = findTabButton(tabId, currentRoot);
+		const group = button?.dataset.group ?? "primary";
+
+		if (typeof ui.sidebar?.activateTab === "function") {
+			ui.sidebar.activateTab(tabId);
+		} else if (typeof ui.sidebar?.changeTab === "function") {
+			ui.sidebar.changeTab(tabId, group, { force: true });
+		}
+
+		if (fallbackClick && getActiveSidebarTabId(currentRoot) !== tabId) {
+			button?.dispatchEvent(new MouseEvent("click", {
+				bubbles: true,
+				cancelable: true,
+				button: 0
+			}));
+		}
+
+		requestAnimationFrame(() => syncSidebarWidthState(getSidebarRoot()));
+	};
+
+	if (defer) {
+		requestAnimationFrame(run);
+		return;
+	}
+	run();
 }
 
 /**
@@ -254,7 +305,10 @@ function createTabButton(nav) {
 		window.BoluoChatEmbed.popoutInstance.render(true);
 	});
 	button.addEventListener("click", () => {
-		requestAnimationFrame(() => syncSidebarWidthState());
+		requestAnimationFrame(() => {
+			refreshEmbeddedFrames();
+			syncSidebarWidthState();
+		});
 	});
 
 	return button;
@@ -520,6 +574,7 @@ Hooks.once("init", async () => {
 		getSidebarRoot,
 		findTabButton,
 		ensureSidebarElements,
+		activateSidebarTab,
 		syncSidebarWidthState,
 		detachSidebarPanel,
 		restoreSidebarPanel,

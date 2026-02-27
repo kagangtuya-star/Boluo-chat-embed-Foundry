@@ -65,27 +65,22 @@ export class tabWindow extends Application {
 			window.BoluoChatEmbed?.findTabButton?.(SIDEBAR_TAB_ID) ??
 			window.BoluoChatEmbed?.getSidebarRoot?.()?.querySelector?.(`[data-tab="${SIDEBAR_TAB_ID}"]`);
 		if (navItem) navItem.style.display = "none";
-		if (typeof ui.sidebar.activateTab === "function") {
-			ui.sidebar.activateTab("chat");
-		} else if (typeof ui.sidebar.changeTab === "function") {
-			ui.sidebar.changeTab("chat", "primary", { force: true });
-		}
+		window.BoluoChatEmbed?.activateSidebarTab?.("chat", { defer: true });
 		window.BoluoChatEmbed?.syncSidebarWidthState?.();
 	}
 
 	async close(options = {}) {
+		window.BoluoChatEmbed?.ensureSidebarElements?.();
 		const navItem =
 			window.BoluoChatEmbed?.findTabButton?.(SIDEBAR_TAB_ID) ??
 			window.BoluoChatEmbed?.getSidebarRoot?.()?.querySelector?.(`[data-tab="${SIDEBAR_TAB_ID}"]`);
 		if (navItem) navItem.style.display = "";
-		if (typeof ui.sidebar.activateTab === "function") {
-			ui.sidebar.activateTab(SIDEBAR_TAB_ID);
-		} else if (typeof ui.sidebar.changeTab === "function") {
-			ui.sidebar.changeTab(SIDEBAR_TAB_ID, "primary", { force: true });
-		}
+		window.BoluoChatEmbed?.refreshEmbeddedFrames?.();
+		window.BoluoChatEmbed?.activateSidebarTab?.(SIDEBAR_TAB_ID, {
+			defer: true,
+			fallbackClick: true
+		});
 		window.BoluoChatEmbed?.syncSidebarWidthState?.();
-
-		window.BoluoChatEmbed?.ensureSidebarElements?.();
 
 		return super.close(options);
 	}
