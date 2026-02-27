@@ -465,22 +465,35 @@ function createEmbeddedIframe(elementId) {
 
 /**
  * 同步刷新侧栏与弹窗 iframe 地址
- * @param {{mobileMode?: boolean}} [options]
+ * 仅在首次加载、设置地址变更或首次切换到移动端模式时重载，避免频繁白屏刷新
+ * @param {{mobileMode?: boolean, forceReload?: boolean}} [options]
  */
 function refreshEmbeddedFrames(options = {}) {
 	const {
-		mobileMode = isBoluoTabActive(getSidebarRoot())
+		mobileMode = isBoluoTabActive(getSidebarRoot()),
+		forceReload = false
 	} = options;
-	const embeddedUrl = getEmbeddedUrl({ mobileMode });
 	const panel = getSidebarPanel();
 	const iframe =
 		panel?.querySelector?.(`#${SIDEBAR_IFRAME_ID}`) ?? document.getElementById(SIDEBAR_IFRAME_ID);
-	if (iframe && iframe.getAttribute("src") !== embeddedUrl) {
-		iframe.src = embeddedUrl;
+	if (!iframe) return;
+
+	const baseUrl = getEmbeddedUrl({ mobileMode: false });
+	const targetUrl = getEmbeddedUrl({ mobileMode });
+	const isFirstLoad = !iframe.getAttribute("src");
+	const baseUrlChanged = iframe.dataset.boluoBaseUrl !== baseUrl;
+	const needsMobileUpgrade = mobileMode && iframe.dataset.boluoMobileSession !== "true";
+	const shouldReload = forceReload || isFirstLoad || baseUrlChanged || needsMobileUpgrade;
+
+	if (shouldReload && iframe.getAttribute("src") !== targetUrl) {
+		iframe.src = targetUrl;
 	}
-	if (iframe) {
-		iframe.dataset.boluoMobileUa = mobileMode ? "true" : "false";
+
+	if (shouldReload) {
+		iframe.dataset.boluoMobileSession = mobileMode ? "true" : "false";
 	}
+	iframe.dataset.boluoBaseUrl = baseUrl;
+	iframe.dataset.boluoMobileUa = mobileMode ? "true" : "false";
 }
 
 Hooks.once("init", async () => {
