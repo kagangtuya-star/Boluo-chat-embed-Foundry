@@ -44,3 +44,251 @@ iframe.boluo-chat-iframe {
 iframe.boluo-chat-iframe.boluo-iframe-ready {
 	opacity: 1;
 }
+
+.application.boluo-dialogue-window,
+#boluo-dialogue-window {
+	background: transparent !important;
+	border: 0 !important;
+	box-shadow: none !important;
+}
+
+#boluo-dialogue-window .window-header {
+	display: none;
+}
+
+#boluo-dialogue-window .window-resizable-handle {
+	display: none !important;
+}
+
+#boluo-dialogue-window .window-content,
+#boluo-dialogue-window .window-content .content {
+	overflow: hidden !important;
+	height: 100% !important;
+	padding: 0;
+	background: transparent;
+}
+
+#boluo-dialogue-window .window-content {
+	display: flex;
+	flex: 1 1 auto;
+}
+
+#boluo-dialogue-window .content,
+#boluo-dialogue-root {
+	width: 100%;
+	height: 100%;
+}
+
+.boluo-dialogue-shell {
+	width: 100%;
+	height: 100%;
+}
+
+.boluo-dialogue-card {
+	position: relative;
+	width: 100%;
+	height: 100%;
+	border-radius: 28px;
+	background: var(--boluo-dialogue-theme-color, #0e0f10);
+	box-shadow: 0 22px 48px rgba(0, 0, 0, 0.42);
+	color: #f7f8fc;
+	overflow: hidden;
+}
+
+.boluo-dialogue-message-shell {
+	display: grid;
+	grid-template-columns: clamp(96px, 22%, 220px) minmax(0, 1fr);
+	align-items: stretch;
+	gap: 22px;
+	width: 100%;
+	height: 100%;
+	padding: 28px 32px 24px;
+}
+
+.boluo-dialogue-left-column,
+.boluo-dialogue-right-column {
+	display: flex;
+	flex-direction: column;
+	min-width: 0;
+	min-height: 0;
+	height: 100%;
+}
+
+.boluo-dialogue-portrait-frame {
+	display: flex;
+	flex: 1 1 auto;
+	align-items: center;
+	justify-content: center;
+	width: 100%;
+	min-height: 0;
+	border-radius: 24px;
+	background: var(--boluo-dialogue-theme-color, #0e0f10);
+	overflow: hidden;
+}
+
+.boluo-dialogue-character-image {
+	display: block;
+	width: 100%;
+	height: 100%;
+	object-fit: contain;
+}
+
+.boluo-dialogue-header-row {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 16px;
+	min-height: 48px;
+}
+
+.boluo-dialogue-nameplate {
+	color: var(--boluo-dialogue-name-color, #f2dbff);
+	font-size: 32px;
+	font-weight: 800;
+	line-height: 1.05;
+}
+
+.page-indicator {
+	flex: 0 0 auto;
+	font-size: 14px;
+	color: rgba(247, 248, 252, 0.72);
+}
+
+.boluo-dialogue-copy-stage {
+	flex: 1 1 auto;
+	min-height: 0;
+	overflow: hidden;
+}
+
+.boluo-dialogue-copy-viewport {
+	flex: 1 1 auto;
+	height: 100%;
+	min-height: 0;
+	overflow-y: auto;
+	scrollbar-width: thin;
+	scrollbar-color: var(--boluo-dialogue-name-color, #f2dbff) transparent;
+}
+
+.boluo-dialogue-copy-viewport::-webkit-scrollbar {
+	width: 3px;
+}
+
+.boluo-dialogue-copy-viewport::-webkit-scrollbar-track {
+	background: transparent;
+	border-radius: 999px;
+}
+
+.boluo-dialogue-copy-viewport::-webkit-scrollbar-thumb {
+	background: var(--boluo-dialogue-name-color, #f2dbff);
+	border-radius: 999px;
+	opacity: 0.72;
+}
+
+.boluo-dialogue-copy {
+	font-size: var(--boluo-dialogue-font-size, 24px);
+	line-height: 1.65;
+	white-space: normal;
+	overflow-wrap: anywhere;
+}
+
+.boluo-dialogue-window-button {
+	position: absolute;
+	top: 18px;
+	width: 28px;
+	height: 28px;
+	border: 0;
+	border-radius: 999px;
+	background: rgba(255, 255, 255, 0.08);
+	color: #f7f8fc;
+	cursor: pointer;
+	z-index: 3;
+}
+
+.boluo-dialogue-fast-forward {
+	right: 54px;
+}
+
+.boluo-dialogue-minimize {
+	right: 18px;
+}
+
+.boluo-dialogue-drag-handle {
+	position: absolute;
+	top: 0;
+	left: 0;
+	right: 96px;
+	height: 72px;
+	cursor: move;
+	z-index: 1;
+}
+
+.boluo-dialogue-resize-edge {
+	position: absolute;
+	background: transparent;
+}
+
+.boluo-dialogue-resize-edge.edge-left,
+.boluo-dialogue-resize-edge.edge-right {
+	top: 0;
+	bottom: 0;
+	width: 10px;
+}
+
+.boluo-dialogue-resize-edge.edge-top,
+.boluo-dialogue-resize-edge.edge-bottom {
+	left: 0;
+	right: 0;
+	height: 10px;
+}
+
+.boluo-dialogue-resize-edge.edge-left {
+	left: 0;
+}
+
+.boluo-dialogue-resize-edge.edge-right {
+	right: 0;
+}
+
+.boluo-dialogue-resize-edge.edge-top {
+	top: 0;
+}
+
+.boluo-dialogue-resize-edge.edge-bottom {
+	bottom: 0;
+}
+
+.boluo-dialogue-resize-edge.edge-corner {
+	right: 0;
+	bottom: 0;
+	width: 18px;
+	height: 18px;
+}
+
+.boluo-dialogue-shell-collapsed {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+}
+
+.boluo-dialogue-collapsed-tab {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 48px;
+	height: 48px;
+	padding: 0;
+	border: 0;
+	border-radius: 999px;
+	background: color-mix(in srgb, var(--boluo-dialogue-theme-color, #0e0f10) 55%, transparent);
+	color: #f7f8fc;
+	cursor: move;
+	font-size: 22px;
+	line-height: 1;
+	box-shadow: 0 8px 18px rgba(0, 0, 0, 0.18);
+	backdrop-filter: blur(6px);
+}
+
+.boluo-dialogue-collapsed-icon {
+	display: block;
+	transform: translateY(-0.5px);
+}

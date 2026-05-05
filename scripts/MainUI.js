@@ -1,11 +1,39 @@
 import { tabWindow } from "./tabWindow.js";
 import { calculateSidebarTargetWidth } from "./sidebarWidth.mjs";
+import {
+	createHandshakeMessage,
+	createUnsubscribeMessage,
+	isHandshakeAckWithChannel,
+	normalizeBridgeMessageEvent,
+	readRolesSnapshot
+} from "./dialogue/bridge.mjs";
+import { createDialogueStore } from "./dialogue/store.mjs";
+import {
+	DIALOGUE_WORLD_DEFAULTS,
+	DIALOGUE_CLIENT_DEFAULTS,
+	normalizeDialogueClientSettings
+} from "./dialogue/settings.mjs";
+import { syncDialogueApplication } from "./dialogue/app.mjs";
 
 const MODULE_NAMESPACE = "Boluo-chat-embed";
 const LEGACY_NAMESPACE = "embedded-webpage";
 const EMBEDDED_URL_CONFIG_KEY = "embeddedUrl";
 const TAB_TITLE_CONFIG_KEY = "tabTitle";
 const TAB_ICON_CONFIG_KEY = "tabIcon";
+const DIALOGUE_ENABLED_CONFIG_KEY = "dialogueEnabled";
+const DIALOGUE_TYPE_SPEED_CONFIG_KEY = "dialogueTypeSpeed";
+const DIALOGUE_FONT_SIZE_CONFIG_KEY = "dialogueFontSize";
+const DIALOGUE_WAIT_SECONDS_CONFIG_KEY = "dialogueWaitSeconds";
+const DIALOGUE_THEME_COLOR_CONFIG_KEY = "dialogueThemeColor";
+const DIALOGUE_WIDTH_CONFIG_KEY = "dialogueWidth";
+const DIALOGUE_HEIGHT_CONFIG_KEY = "dialogueHeight";
+const DIALOGUE_TOP_CONFIG_KEY = "dialogueTop";
+const DIALOGUE_LEFT_CONFIG_KEY = "dialogueLeft";
+const DIALOGUE_COLLAPSED_CONFIG_KEY = "dialogueCollapsed";
+const DIALOGUE_COLLAPSED_TOP_CONFIG_KEY = "dialogueCollapsedTop";
+const DIALOGUE_COLLAPSED_LEFT_CONFIG_KEY = "dialogueCollapsedLeft";
+const DIALOGUE_COLLAPSED_WIDTH_CONFIG_KEY = "dialogueCollapsedWidth";
+const DIALOGUE_COLLAPSED_HEIGHT_CONFIG_KEY = "dialogueCollapsedHeight";
 const SIDEBAR_TAB_ID = "boluo-chat";
 const SIDEBAR_IFRAME_ID = "boluo-chat-sidebar-iframe";
 const SIDEBAR_WIDE_CLASS = "boluo-sidebar-wide";
@@ -22,6 +50,10 @@ const ICON_MODIFIER_CLASSES = new Set(["fa-fw", "fa-spin", "fa-pulse", "fa-borde
 let sharedPanel = null;
 let panelPlaceholder = null;
 let resizeListenerBound = false;
+let bridgeHandshakeTimer = 0;
+let bridgeMessageListenerBound = false;
+let bridgeBeforeUnloadBound = false;
+const dialogueStore = createDialogueStore();
 
 /**
  * 注册模块设置，并兼容历史命名空间
@@ -57,6 +89,146 @@ async function registerSettings() {
 		onChange: () => updateTabPresentation()
 	});
 
+	game.settings.register(MODULE_NAMESPACE, DIALOGUE_ENABLED_CONFIG_KEY, {
+		name: "启用 CRPG 对话框",
+		hint: "根据 SealChat 当前频道 IC 消息播放剧情对话框。",
+		scope: "world",
+		config: true,
+		type: Boolean,
+		default: DIALOGUE_WORLD_DEFAULTS.dialogueEnabled,
+		onChange: () => syncDialogueSettingsFromGame()
+	});
+
+	game.settings.register(MODULE_NAMESPACE, DIALOGUE_TYPE_SPEED_CONFIG_KEY, {
+		name: "打字速度（毫秒/字）",
+		hint: "每个可见字符的播放间隔。",
+		scope: "world",
+		config: true,
+		type: Number,
+		default: DIALOGUE_WORLD_DEFAULTS.dialogueTypeSpeed,
+		onChange: () => syncDialogueSettingsFromGame()
+	});
+
+	game.settings.register(MODULE_NAMESPACE, DIALOGUE_FONT_SIZE_CONFIG_KEY, {
+		name: "对话字号",
+		hint: "CRPG 对话框正文像素字号。",
+		scope: "world",
+		config: true,
+		type: Number,
+		default: DIALOGUE_WORLD_DEFAULTS.dialogueFontSize,
+		onChange: () => syncDialogueSettingsFromGame()
+	});
+
+	game.settings.register(MODULE_NAMESPACE, DIALOGUE_WAIT_SECONDS_CONFIG_KEY, {
+		name: "句末等待时间（秒）",
+		hint: "单条消息打字完成后的等待秒数。",
+		scope: "world",
+		config: true,
+		type: Number,
+		default: DIALOGUE_WORLD_DEFAULTS.dialogueWaitSeconds,
+		onChange: () => syncDialogueSettingsFromGame()
+	});
+
+	game.settings.register(MODULE_NAMESPACE, DIALOGUE_THEME_COLOR_CONFIG_KEY, {
+		name: "对话框主题色",
+		hint: "CRPG 对话框背景主题色，例如 #0e0f10。",
+		scope: "world",
+		config: true,
+		type: String,
+		default: DIALOGUE_WORLD_DEFAULTS.dialogueThemeColor,
+		onChange: () => syncDialogueSettingsFromGame()
+	});
+
+	game.settings.register(MODULE_NAMESPACE, DIALOGUE_WIDTH_CONFIG_KEY, {
+		name: "对话框宽度",
+		hint: "当前用户的 CRPG 对话框默认宽度。",
+		scope: "client",
+		config: false,
+		type: Number,
+		default: DIALOGUE_CLIENT_DEFAULTS.dialogueWidth,
+		onChange: () => syncDialogueSettingsFromGame()
+	});
+
+	game.settings.register(MODULE_NAMESPACE, DIALOGUE_HEIGHT_CONFIG_KEY, {
+		name: "对话框高度",
+		hint: "当前用户的 CRPG 对话框默认高度。",
+		scope: "client",
+		config: false,
+		type: Number,
+		default: DIALOGUE_CLIENT_DEFAULTS.dialogueHeight,
+		onChange: () => syncDialogueSettingsFromGame()
+	});
+
+	game.settings.register(MODULE_NAMESPACE, DIALOGUE_TOP_CONFIG_KEY, {
+		name: "对话框顶部",
+		hint: "当前用户的 CRPG 对话框顶部偏移。",
+		scope: "client",
+		config: false,
+		type: Number,
+		default: DIALOGUE_CLIENT_DEFAULTS.dialogueTop,
+		onChange: () => syncDialogueSettingsFromGame()
+	});
+
+	game.settings.register(MODULE_NAMESPACE, DIALOGUE_LEFT_CONFIG_KEY, {
+		name: "对话框左偏移",
+		hint: "当前用户的 CRPG 对话框左偏移。",
+		scope: "client",
+		config: false,
+		type: Number,
+		default: DIALOGUE_CLIENT_DEFAULTS.dialogueLeft,
+		onChange: () => syncDialogueSettingsFromGame()
+	});
+
+	game.settings.register(MODULE_NAMESPACE, DIALOGUE_COLLAPSED_CONFIG_KEY, {
+		name: "对话框已最小化",
+		hint: "当前用户的 CRPG 对话框是否最小化。",
+		scope: "client",
+		config: false,
+		type: Boolean,
+		default: DIALOGUE_CLIENT_DEFAULTS.dialogueCollapsed,
+		onChange: () => syncDialogueSettingsFromGame()
+	});
+
+	game.settings.register(MODULE_NAMESPACE, DIALOGUE_COLLAPSED_TOP_CONFIG_KEY, {
+		name: "最小化顶部偏移",
+		hint: "当前用户的最小化标签顶部偏移。",
+		scope: "client",
+		config: false,
+		type: Number,
+		default: DIALOGUE_CLIENT_DEFAULTS.dialogueCollapsedTop,
+		onChange: () => syncDialogueSettingsFromGame()
+	});
+
+	game.settings.register(MODULE_NAMESPACE, DIALOGUE_COLLAPSED_LEFT_CONFIG_KEY, {
+		name: "最小化左偏移",
+		hint: "当前用户的最小化标签左偏移。",
+		scope: "client",
+		config: false,
+		type: Number,
+		default: DIALOGUE_CLIENT_DEFAULTS.dialogueCollapsedLeft,
+		onChange: () => syncDialogueSettingsFromGame()
+	});
+
+	game.settings.register(MODULE_NAMESPACE, DIALOGUE_COLLAPSED_WIDTH_CONFIG_KEY, {
+		name: "最小化宽度",
+		hint: "当前用户的最小化标签宽度。",
+		scope: "client",
+		config: false,
+		type: Number,
+		default: DIALOGUE_CLIENT_DEFAULTS.dialogueCollapsedWidth,
+		onChange: () => syncDialogueSettingsFromGame()
+	});
+
+	game.settings.register(MODULE_NAMESPACE, DIALOGUE_COLLAPSED_HEIGHT_CONFIG_KEY, {
+		name: "最小化高度",
+		hint: "当前用户的最小化标签高度。",
+		scope: "client",
+		config: false,
+		type: Number,
+		default: DIALOGUE_CLIENT_DEFAULTS.dialogueCollapsedHeight,
+		onChange: () => syncDialogueSettingsFromGame()
+	});
+
 	if (!game.settings.settings.has(`${LEGACY_NAMESPACE}.${EMBEDDED_URL_CONFIG_KEY}`)) {
 		game.settings.register(LEGACY_NAMESPACE, EMBEDDED_URL_CONFIG_KEY, {
 			scope: "world",
@@ -73,6 +245,32 @@ async function registerSettings() {
 		const legacyValue = game.settings.get(LEGACY_NAMESPACE, EMBEDDED_URL_CONFIG_KEY);
 		await game.settings.set(MODULE_NAMESPACE, EMBEDDED_URL_CONFIG_KEY, legacyValue);
 	}
+}
+
+function getDialogueClientSettings() {
+	return normalizeDialogueClientSettings({
+		dialogueWidth: game.settings.get(MODULE_NAMESPACE, DIALOGUE_WIDTH_CONFIG_KEY),
+		dialogueHeight: game.settings.get(MODULE_NAMESPACE, DIALOGUE_HEIGHT_CONFIG_KEY),
+		dialogueTop: game.settings.get(MODULE_NAMESPACE, DIALOGUE_TOP_CONFIG_KEY),
+		dialogueLeft: game.settings.get(MODULE_NAMESPACE, DIALOGUE_LEFT_CONFIG_KEY),
+		dialogueCollapsed: game.settings.get(MODULE_NAMESPACE, DIALOGUE_COLLAPSED_CONFIG_KEY),
+		dialogueCollapsedTop: game.settings.get(MODULE_NAMESPACE, DIALOGUE_COLLAPSED_TOP_CONFIG_KEY),
+		dialogueCollapsedLeft: game.settings.get(MODULE_NAMESPACE, DIALOGUE_COLLAPSED_LEFT_CONFIG_KEY),
+		dialogueCollapsedWidth: game.settings.get(MODULE_NAMESPACE, DIALOGUE_COLLAPSED_WIDTH_CONFIG_KEY),
+		dialogueCollapsedHeight: game.settings.get(MODULE_NAMESPACE, DIALOGUE_COLLAPSED_HEIGHT_CONFIG_KEY)
+	});
+}
+
+function syncDialogueSettingsFromGame() {
+	dialogueStore.setSettings({
+		dialogueEnabled: game.settings.get(MODULE_NAMESPACE, DIALOGUE_ENABLED_CONFIG_KEY),
+		dialogueTypeSpeed: game.settings.get(MODULE_NAMESPACE, DIALOGUE_TYPE_SPEED_CONFIG_KEY),
+		dialogueFontSize: game.settings.get(MODULE_NAMESPACE, DIALOGUE_FONT_SIZE_CONFIG_KEY),
+		dialogueWaitSeconds: game.settings.get(MODULE_NAMESPACE, DIALOGUE_WAIT_SECONDS_CONFIG_KEY),
+		dialogueThemeColor: game.settings.get(MODULE_NAMESPACE, DIALOGUE_THEME_COLOR_CONFIG_KEY),
+		...getDialogueClientSettings()
+	});
+	syncDialogueApplication();
 }
 
 /**
@@ -211,6 +409,10 @@ function getSidebarPanel() {
 	const panel = document.getElementById(SIDEBAR_TAB_ID);
 	if (panel) sharedPanel = panel;
 	return sharedPanel;
+}
+
+function getSidebarIframe() {
+	return getSidebarPanel()?.querySelector?.(`#${SIDEBAR_IFRAME_ID}`) ?? document.getElementById(SIDEBAR_IFRAME_ID);
 }
 
 /**
@@ -706,8 +908,88 @@ function createEmbeddedIframe(elementId) {
 	setIframeLoadingState(iframe, true);
 	iframe.addEventListener("load", () => {
 		setIframeLoadingState(iframe, false);
+		if (dialogueStore.getState().settings.dialogueEnabled) {
+			startBridgeHandshakePolling(iframe);
+		} else {
+			dialogueStore.setBridgeWaiting();
+			clearBridgeHandshakeTimer();
+		}
 	});
 	return iframe;
+}
+
+function clearBridgeHandshakeTimer() {
+	if (bridgeHandshakeTimer) {
+		window.clearInterval(bridgeHandshakeTimer);
+		bridgeHandshakeTimer = 0;
+	}
+}
+
+function sendBridgeHandshake(iframe = getSidebarIframe()) {
+	if (!iframe?.contentWindow || !dialogueStore.getState().settings.dialogueEnabled) {
+		return;
+	}
+
+	iframe.contentWindow.postMessage(createHandshakeMessage(), "*");
+}
+
+function sendBridgeUnsubscribe(iframe = getSidebarIframe()) {
+	if (!iframe?.contentWindow) {
+		return;
+	}
+
+	iframe.contentWindow.postMessage(createUnsubscribeMessage(), "*");
+}
+
+function startBridgeHandshakePolling(iframe = getSidebarIframe()) {
+	dialogueStore.setBridgeWaiting();
+	clearBridgeHandshakeTimer();
+	sendBridgeHandshake(iframe);
+	bridgeHandshakeTimer = window.setInterval(() => {
+		if (dialogueStore.getState().bridgeReady) {
+			clearBridgeHandshakeTimer();
+			return;
+		}
+
+		sendBridgeHandshake(iframe);
+	}, 1500);
+}
+
+function handleBridgeMessage(event) {
+	const iframe = getSidebarIframe();
+	if (event.source !== iframe?.contentWindow) {
+		return;
+	}
+
+	const data = event.data;
+	if (!data || typeof data !== "object" || typeof data.type !== "string") {
+		return;
+	}
+
+	if (!data.type.startsWith("sealchat.bridge.")) {
+		return;
+	}
+
+	if (isHandshakeAckWithChannel(data)) {
+		dialogueStore.setBridgeReady({
+			worldId: typeof data.worldId === "string" ? data.worldId : "",
+			channelId: data.channelId
+		});
+		syncDialogueApplication();
+		return;
+	}
+
+	const roles = readRolesSnapshot(data);
+	if (roles) {
+		dialogueStore.setRoles(roles);
+		return;
+	}
+
+	const normalized = normalizeBridgeMessageEvent(data, dialogueStore.getState().rolesById);
+	if (normalized) {
+		dialogueStore.dispatchQueueEvent(normalized);
+		syncDialogueApplication();
+	}
 }
 
 /**
@@ -732,6 +1014,9 @@ function refreshEmbeddedFrames(options = {}) {
 	const shouldReload = forceReload || isFirstLoad || baseUrlChanged;
 
 	if (shouldReload && iframe.getAttribute("src") !== targetUrl) {
+		sendBridgeUnsubscribe(iframe);
+		dialogueStore.setBridgeWaiting();
+		clearBridgeHandshakeTimer();
 		setIframeLoadingState(iframe, true);
 		iframe.src = targetUrl;
 	}
@@ -757,13 +1042,29 @@ Hooks.once("init", async () => {
 		detachSidebarPanel,
 		restoreSidebarPanel,
 		getSidebarPanel,
-		getTabTitle
+		getTabTitle,
+		dialogueStore,
+		syncDialogueSettingsFromGame
 	});
 });
 
 Hooks.once("ready", async () => {
 	// 首次渲染侧栏元素
 	ensureSidebarElements();
+	syncDialogueSettingsFromGame();
+
+	if (!bridgeMessageListenerBound) {
+		window.addEventListener("message", handleBridgeMessage);
+		bridgeMessageListenerBound = true;
+	}
+
+	if (!bridgeBeforeUnloadBound) {
+		window.addEventListener("beforeunload", () => {
+			clearBridgeHandshakeTimer();
+			sendBridgeUnsubscribe();
+		});
+		bridgeBeforeUnloadBound = true;
+	}
 
 	// 侧栏重新渲染时补齐元素（v13 会频繁重建 DOM）
 	Hooks.on("renderSidebar", (_, element) => {
