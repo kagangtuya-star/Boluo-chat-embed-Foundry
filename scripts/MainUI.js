@@ -38,6 +38,7 @@ const SIDEBAR_TAB_ID = "boluo-chat";
 const SIDEBAR_IFRAME_ID = "boluo-chat-sidebar-iframe";
 const SIDEBAR_WIDE_CLASS = "boluo-sidebar-wide";
 const SIDEBAR_CONTAINER_ID = "ui-right";
+const SIDEBAR_CONTENT_ID = "sidebar-content";
 const MOBILE_MODE_PARAM_KEY = "mobile";
 const EMBED_IFRAME_CLASS = "boluo-chat-iframe";
 const EMBED_IFRAME_READY_CLASS = "boluo-iframe-ready";
@@ -307,15 +308,80 @@ function getSidebarContainer(root = getSidebarRoot()) {
 }
 
 /**
- * 获取侧边栏当前实际宽度
- * @param {HTMLElement} root
+ * 获取 Foundry v13 侧边栏内容容器
+ * 该节点持有原生 --sidebar-width 变量。
+ * @param {HTMLElement} [root]
+ * @returns {HTMLElement | null}
+ */
+function getSidebarContentElement(root = getSidebarRoot()) {
+	return (
+		root?.closest?.(`#${SIDEBAR_CONTENT_ID}`) ??
+		root?.querySelector?.(`#${SIDEBAR_CONTENT_ID}`) ??
+		document.getElementById(SIDEBAR_CONTENT_ID)
+	);
+}
+
+/**
+ * 读取 Foundry UI 缩放比例
+ * v13 下 getBoundingClientRect 会反映缩放后的视觉宽度，需要换回逻辑宽度。
  * @returns {number}
  */
-function getSidebarCurrentWidth(root) {
+function getFoundryUiScale() {
+	try {
+		const uiScale = game.settings.get("core", "uiConfig")?.uiScale;
+		if (Number.isFinite(uiScale) && uiScale > 0) return uiScale;
+	} catch (_error) {
+		// ignore
+	}
+
+	return 1;
+}
+
+/**
+ * 获取侧边栏当前实际宽度
+ * @param {HTMLElement} root
+ * @param {HTMLElement | null} [sidebarContent]
+ * @returns {number}
+ */
+function getSidebarCurrentWidth(root, sidebarContent = getSidebarContentElement(root)) {
 	if (!root) return 0;
+
+	const nativeSidebarWidth = Number.parseFloat(
+		window.getComputedStyle(sidebarContent ?? root).getPropertyValue("--sidebar-width")
+	);
+	if (Number.isFinite(nativeSidebarWidth) && nativeSidebarWidth > 0) return nativeSidebarWidth;
+
 	const computedWidth = Number.parseFloat(window.getComputedStyle(root).width);
 	if (Number.isFinite(computedWidth) && computedWidth > 0) return computedWidth;
-	return root.getBoundingClientRect?.().width ?? 0;
+
+	const uiScale = getFoundryUiScale();
+	const rectWidth = root.getBoundingClientRect?.().width ?? 0;
+	return rectWidth > 0 ? (rectWidth / uiScale) : 0;
+}
+
+/**
+ * 估算视觉宽度下的侧边栏横向损耗
+ * 返回值保持为缩放后的视觉宽度，供 calculateSidebarTargetWidth 结合 uiScale 换回逻辑宽度。
+ * @param {number} currentWidth
+ * @param {HTMLElement | null} [panel]
+ * @param {number} [uiScale]
+ * @returns {number}
+ */
+function getSidebarHorizontalChromeWidth(currentWidth, panel = getSidebarPanel(), uiScale = getFoundryUiScale()) {
+	if (!Number.isFinite(currentWidth) || currentWidth <= 0) return 0;
+	const normalizedUiScale = Number.isFinite(uiScale) && uiScale > 0 ? uiScale : 1;
+
+	const panelRectWidth = panel?.getBoundingClientRect?.().width ?? 0;
+	if (Number.isFinite(panelRectWidth) && panelRectWidth > 0) {
+		return Math.max(0, (currentWidth * normalizedUiScale) - panelRectWidth);
+	}
+
+	const panelLogicalWidth = panel?.clientWidth ?? 0;
+	if (Number.isFinite(panelLogicalWidth) && panelLogicalWidth > 0) {
+		return Math.max(0, (currentWidth - panelLogicalWidth) * normalizedUiScale);
+	}
+
+	return 0;
 }
 
 /**
@@ -334,22 +400,28 @@ function getViewportWidth() {
  */
 function syncSidebarWidthVariable(root, shouldWide) {
 	if (!root) return;
-	const container = getSidebarContainer(root);
-	const targets = [root, container].filter(Boolean);
+	const sidebarContent = getSidebarContentElement(root);
+	const variableTargets = [sidebarContent].filter(Boolean);
+	const panel = getSidebarPanel();
 
 	if (!shouldWide) {
-		for (const target of targets) {
+		for (const target of variableTargets) {
 			target.style.removeProperty("--boluo-active-sidebar-width");
 		}
 		return;
 	}
 
+	const uiScale = getFoundryUiScale();
+	const currentWidth = getSidebarCurrentWidth(root, sidebarContent);
+	const horizontalChromeWidth = getSidebarHorizontalChromeWidth(currentWidth, panel, uiScale);
 	const targetWidth = calculateSidebarTargetWidth({
-		currentWidth: getSidebarCurrentWidth(root),
-		viewportWidth: getViewportWidth()
+		currentWidth,
+		viewportWidth: getViewportWidth(),
+		horizontalChromeWidth,
+		uiScale
 	});
 	const widthValue = `${Math.round(targetWidth)}px`;
-	for (const target of targets) {
+	for (const target of variableTargets) {
 		target.style.setProperty("--boluo-active-sidebar-width", widthValue);
 	}
 }
@@ -581,6 +653,8 @@ function syncSidebarWidthState(root = getSidebarRoot()) {
 
 	const container = getSidebarContainer(root);
 	container?.classList.toggle(SIDEBAR_WIDE_CLASS, shouldWide);
+	const sidebarContent = getSidebarContentElement(root);
+	sidebarContent?.classList.toggle(SIDEBAR_WIDE_CLASS, shouldWide);
 	syncSidebarWidthVariable(root, shouldWide);
 }
 
@@ -612,6 +686,15 @@ function ensureSidebarStateObserver(root) {
 			attributeFilter: ["class"]
 		});
 		container.__boluoStateObserver = containerObserver;
+	}
+
+	const sidebarContent = getSidebarContentElement(root);
+	if (sidebarContent && !sidebarContent.__boluoTransitionListenerBound) {
+		sidebarContent.addEventListener("transitionend", (event) => {
+			if (event.target !== sidebarContent) return;
+			syncSidebarWidthState(getSidebarRoot());
+		});
+		sidebarContent.__boluoTransitionListenerBound = true;
 	}
 }
 
@@ -702,35 +785,20 @@ function findChatPanel(root) {
 }
 
 /**
- * 创建或获取模块专属的侧栏内容节点
- * @param {HTMLElement} root
+ * 基于现有聊天面板克隆一个同布局的新面板壳
+ * 这样可以继承 Foundry v13 的真实布局类与属性，避免被右侧 tab rail 覆盖。
+ * @param {HTMLElement | null} referencePanel
  * @returns {HTMLElement}
  */
-function ensureTabPanel(root = getSidebarRoot()) {
-	const existing = getSidebarPanel();
-	if (existing) {
-		if (existing.dataset.detached === "true") {
-			return existing;
-		}
-		if (root && !root.contains(existing)) {
-			const container = findChatPanel(root)?.parentElement ?? root;
-			container?.appendChild(existing);
-		}
-		if (!existing.querySelector(`#${SIDEBAR_IFRAME_ID}`)) {
-			existing.appendChild(createEmbeddedIframe(SIDEBAR_IFRAME_ID));
-		}
-		return existing;
-	}
-
-	const containerRoot = root ?? getSidebarRoot();
-	if (!containerRoot) return null;
-
+function createSidebarPanelShell(referencePanel) {
 	const panel = document.createElement("section");
+
 	panel.id = SIDEBAR_TAB_ID;
 	panel.dataset.tab = SIDEBAR_TAB_ID;
+	panel.setAttribute("data-tab", SIDEBAR_TAB_ID);
 	panel.setAttribute("role", "tabpanel");
 	panel.setAttribute("aria-label", getTabTitle());
-	panel.classList.add("tab", "sidebar-tab", "directory", "flexcol");
+	panel.classList.add("tab", "sidebar-tab", "flexcol", "boluo-sidebar-panel");
 	panel.style.border = "none";
 	panel.style.width = "100%";
 	panel.style.height = "100%";
@@ -740,11 +808,56 @@ function ensureTabPanel(root = getSidebarRoot()) {
 		panel.style.padding = "0";
 	}
 
+	return panel;
+}
+
+/**
+ * 将自定义面板插到原生 chat 面板后方，避免被 v13 侧栏 rail 覆盖。
+ * @param {HTMLElement} panel
+ * @param {HTMLElement} [root]
+ * @param {HTMLElement | null} [referencePanel]
+ */
+function insertSidebarPanel(panel, root = getSidebarRoot(), referencePanel = findChatPanel(root)) {
+	if (!(panel instanceof HTMLElement)) return;
+	const container = referencePanel?.parentElement ?? root;
+	if (!container) return;
+
+	if (referencePanel?.parentElement === container) {
+		referencePanel.after(panel);
+		return;
+	}
+
+	if (panel.parentElement !== container) {
+		container.appendChild(panel);
+	}
+}
+
+/**
+ * 创建或获取模块专属的侧栏内容节点
+ * @param {HTMLElement} root
+ * @returns {HTMLElement}
+ */
+function ensureTabPanel(root = getSidebarRoot()) {
+	const existing = getSidebarPanel();
+	const referencePanel = findChatPanel(root);
+	if (existing) {
+		if (existing.dataset.detached === "true") {
+			return existing;
+		}
+		insertSidebarPanel(existing, root, referencePanel);
+		if (!existing.querySelector(`#${SIDEBAR_IFRAME_ID}`)) {
+			existing.appendChild(createEmbeddedIframe(SIDEBAR_IFRAME_ID));
+		}
+		return existing;
+	}
+
+	const containerRoot = root ?? getSidebarRoot();
+	if (!containerRoot) return null;
+
+	const panel = createSidebarPanelShell(referencePanel);
 	panel.appendChild(createEmbeddedIframe(SIDEBAR_IFRAME_ID));
 
-	const referencePanel = findChatPanel(containerRoot);
-	const container = referencePanel?.parentElement ?? containerRoot;
-	container?.appendChild(panel);
+	insertSidebarPanel(panel, containerRoot, referencePanel);
 
 	sharedPanel = panel;
 	return panel;
@@ -788,8 +901,7 @@ function restoreSidebarPanel(panel = getSidebarPanel(), root = getSidebarRoot())
 		placeholder.remove();
 		panelPlaceholder = null;
 	} else {
-		const container = findChatPanel(root)?.parentElement ?? root;
-		container?.appendChild(panel);
+		insertSidebarPanel(panel, root);
 		if (placeholder?.isConnected) placeholder.remove();
 		panelPlaceholder = null;
 	}
@@ -999,7 +1111,7 @@ function handleBridgeMessage(event) {
  */
 function refreshEmbeddedFrames(options = {}) {
 	const {
-		mobileMode = true,
+		mobileMode = false,
 		forceReload = false
 	} = options;
 	const panel = getSidebarPanel();
@@ -1011,7 +1123,9 @@ function refreshEmbeddedFrames(options = {}) {
 	const targetUrl = getEmbeddedUrl({ mobileMode });
 	const isFirstLoad = !iframe.getAttribute("src");
 	const baseUrlChanged = iframe.dataset.boluoBaseUrl !== baseUrl;
-	const shouldReload = forceReload || isFirstLoad || baseUrlChanged;
+	const expectedMobileSession = mobileMode ? "true" : "false";
+	const mobileSessionChanged = iframe.dataset.boluoMobileSession !== expectedMobileSession;
+	const shouldReload = forceReload || isFirstLoad || baseUrlChanged || mobileSessionChanged;
 
 	if (shouldReload && iframe.getAttribute("src") !== targetUrl) {
 		sendBridgeUnsubscribe(iframe);
@@ -1022,10 +1136,10 @@ function refreshEmbeddedFrames(options = {}) {
 	}
 
 	if (shouldReload) {
-		iframe.dataset.boluoMobileSession = mobileMode ? "true" : "false";
+		iframe.dataset.boluoMobileSession = expectedMobileSession;
 	}
 	iframe.dataset.boluoBaseUrl = baseUrl;
-	iframe.dataset.boluoMobileUa = mobileMode ? "true" : "false";
+	iframe.dataset.boluoMobileUa = expectedMobileSession;
 }
 
 Hooks.once("init", async () => {
@@ -1073,9 +1187,13 @@ Hooks.once("ready", async () => {
 			element?.[0] instanceof HTMLElement ? element[0] :
 			getSidebarRoot();
 		ensureSidebarElements(domElement);
+		syncSidebarWidthState(domElement);
 	});
 
 	Hooks.on("collapseSidebar", () => {
 		syncSidebarWidthState();
+		requestAnimationFrame(() => {
+			syncSidebarWidthState();
+		});
 	});
 });

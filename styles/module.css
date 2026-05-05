@@ -1,11 +1,8 @@
-#sidebar.boluo-sidebar-wide,
-#ui-right.boluo-sidebar-wide #sidebar {
+#sidebar-content.boluo-sidebar-wide {
 	--sidebar-width: var(--boluo-active-sidebar-width);
 }
 
-#sidebar.boluo-sidebar-wide:not(.collapsed),
-#ui-right.boluo-sidebar-wide #sidebar:not(.collapsed),
-#ui-right.boluo-sidebar-wide .sidebar:not(.collapsed) {
+#sidebar-content.boluo-sidebar-wide {
 	width: var(--boluo-active-sidebar-width) !important;
 	flex: 0 0 var(--boluo-active-sidebar-width) !important;
 	min-width: var(--boluo-active-sidebar-width);
@@ -14,19 +11,35 @@
 
 #sidebar.boluo-sidebar-wide #boluo-chat,
 #ui-right.boluo-sidebar-wide #sidebar #boluo-chat {
+	display: flex;
+	flex: 1 1 auto;
+	flex-direction: column;
+	min-height: 0;
 	padding: 0 !important;
 	width: 100% !important;
 	min-width: 0;
 	max-width: 100% !important;
-	overflow: hidden;
+	overflow: hidden !important;
 }
 
 #sidebar.boluo-sidebar-wide #boluo-chat iframe,
 #ui-right.boluo-sidebar-wide #sidebar #boluo-chat iframe {
 	display: block;
+	flex: 1 1 auto;
+	height: 100% !important;
 	width: 100% !important;
 	min-width: 0;
 	max-width: 100%;
+}
+
+#sidebar.boluo-sidebar-wide #boluo-chat.boluo-sidebar-panel,
+#ui-right.boluo-sidebar-wide #sidebar #boluo-chat.boluo-sidebar-panel {
+	scrollbar-width: none;
+}
+
+#sidebar.boluo-sidebar-wide #boluo-chat.boluo-sidebar-panel::-webkit-scrollbar,
+#ui-right.boluo-sidebar-wide #sidebar #boluo-chat.boluo-sidebar-panel::-webkit-scrollbar {
+	display: none;
 }
 
 #boluo-chat-popout .window-content,
