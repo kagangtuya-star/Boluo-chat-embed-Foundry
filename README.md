@@ -10,3 +10,10 @@ https://foundryvtt.com/packages/Boluo-chat-embed-Foundry
 
 参考代码
 https://github.com/Saibot393/notebook
+
+## CRPG 对话框
+
+- 该功能从右侧侧边栏中的 SealChat iframe 获取实时 Bridge 数据。
+- 只有进入 SealChat 完整频道页，并收到 `sealchat.bridge.handshake.ack` 后，对话框才会开始消费消息。
+- 当前仅处理 IC 公共消息，不处理 OOC 与悄悄话。
+- 右键弹出的 SealChat 窗口只用于查看，不承担 Bridge owner 角色。
