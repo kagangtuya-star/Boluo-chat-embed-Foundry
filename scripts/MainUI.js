@@ -1,4 +1,5 @@
 import { tabWindow } from "./tabWindow.js";
+import { calculateSidebarTargetWidth } from "./sidebarWidth.mjs";
 
 const MODULE_NAMESPACE = "Boluo-chat-embed";
 const LEGACY_NAMESPACE = "embedded-webpage";
@@ -20,6 +21,7 @@ const ICON_MODIFIER_CLASSES = new Set(["fa-fw", "fa-spin", "fa-pulse", "fa-borde
 
 let sharedPanel = null;
 let panelPlaceholder = null;
+let resizeListenerBound = false;
 
 /**
  * 注册模块设置，并兼容历史命名空间
@@ -104,6 +106,54 @@ function getSidebarContainer(root = getSidebarRoot()) {
 	if (!root) return null;
 	if (root.parentElement?.id === SIDEBAR_CONTAINER_ID) return root.parentElement;
 	return document.getElementById(SIDEBAR_CONTAINER_ID);
+}
+
+/**
+ * 获取侧边栏当前实际宽度
+ * @param {HTMLElement} root
+ * @returns {number}
+ */
+function getSidebarCurrentWidth(root) {
+	if (!root) return 0;
+	const computedWidth = Number.parseFloat(window.getComputedStyle(root).width);
+	if (Number.isFinite(computedWidth) && computedWidth > 0) return computedWidth;
+	return root.getBoundingClientRect?.().width ?? 0;
+}
+
+/**
+ * 获取当前视口宽度
+ * @returns {number}
+ */
+function getViewportWidth() {
+	const documentWidth = document.documentElement?.clientWidth ?? 0;
+	return Math.max(window.innerWidth ?? 0, documentWidth);
+}
+
+/**
+ * 同步聊天标签激活时的动态侧栏宽度变量
+ * @param {HTMLElement} root
+ * @param {boolean} shouldWide
+ */
+function syncSidebarWidthVariable(root, shouldWide) {
+	if (!root) return;
+	const container = getSidebarContainer(root);
+	const targets = [root, container].filter(Boolean);
+
+	if (!shouldWide) {
+		for (const target of targets) {
+			target.style.removeProperty("--boluo-active-sidebar-width");
+		}
+		return;
+	}
+
+	const targetWidth = calculateSidebarTargetWidth({
+		currentWidth: getSidebarCurrentWidth(root),
+		viewportWidth: getViewportWidth()
+	});
+	const widthValue = `${Math.round(targetWidth)}px`;
+	for (const target of targets) {
+		target.style.setProperty("--boluo-active-sidebar-width", widthValue);
+	}
 }
 
 /**
@@ -329,6 +379,7 @@ function syncSidebarWidthState(root = getSidebarRoot()) {
 
 	const container = getSidebarContainer(root);
 	container?.classList.toggle(SIDEBAR_WIDE_CLASS, shouldWide);
+	syncSidebarWidthVariable(root, shouldWide);
 }
 
 /**
@@ -360,6 +411,17 @@ function ensureSidebarStateObserver(root) {
 		});
 		container.__boluoStateObserver = containerObserver;
 	}
+}
+
+/**
+ * 绑定窗口尺寸变化监听，保证小屏下动态宽度重新计算
+ */
+function ensureWindowResizeListener() {
+	if (resizeListenerBound) return;
+	window.addEventListener("resize", () => {
+		syncSidebarWidthState();
+	});
+	resizeListenerBound = true;
 }
 
 /**
@@ -544,6 +606,7 @@ function ensureSidebarElements(root = getSidebarRoot()) {
 	const nav = findPrimaryNav(root);
 	if (!nav) return;
 	ensureSidebarStateObserver(root);
+	ensureWindowResizeListener();
 
 	let button = findTabButton(SIDEBAR_TAB_ID, root);
 	if (!button) {
