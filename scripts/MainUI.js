@@ -21,6 +21,7 @@ const EMBEDDED_URL_CONFIG_KEY = "embeddedUrl";
 const TAB_TITLE_CONFIG_KEY = "tabTitle";
 const TAB_ICON_CONFIG_KEY = "tabIcon";
 const SIDEBAR_MIN_WIDTH_CONFIG_KEY = "sidebarMinWidth";
+const SIDEBAR_PREFERRED_WIDTH_CONFIG_KEY = "sidebarPreferredWidth";
 const SIDEBAR_EMBED_SCALE_CONFIG_KEY = "sidebarEmbedScale";
 const DIALOGUE_ENABLED_CONFIG_KEY = "dialogueEnabled";
 const DIALOGUE_TYPE_SPEED_CONFIG_KEY = "dialogueTypeSpeed";
@@ -49,6 +50,7 @@ const DEFAULT_EMBEDDED_URL = "https://app.boluo.chat/zh-CN";
 const DEFAULT_TAB_TITLE = "菠萝聊天";
 const DEFAULT_TAB_ICON = "fa-lemon";
 const DEFAULT_SIDEBAR_MIN_WIDTH = 360;
+const DEFAULT_SIDEBAR_PREFERRED_WIDTH = 310;
 const DEFAULT_SIDEBAR_EMBED_SCALE = 1;
 const MIN_SIDEBAR_EMBED_SCALE = 0.25;
 const ICON_STYLE_CLASSES = new Set(["fa-solid", "fa-regular", "fa-brands", "fa-light", "fa-thin", "fa-duotone"]);
@@ -103,6 +105,16 @@ async function registerSettings() {
 		config: true,
 		type: Number,
 		default: DEFAULT_SIDEBAR_MIN_WIDTH,
+		onChange: () => syncSidebarWidthState()
+	});
+
+	game.settings.register(MODULE_NAMESPACE, SIDEBAR_PREFERRED_WIDTH_CONFIG_KEY, {
+		name: "侧栏默认宽度",
+		hint: "当前用户激活菠萝标签时，FVTT 侧边栏优先展开到的默认宽度（像素）。",
+		scope: "client",
+		config: true,
+		type: Number,
+		default: DEFAULT_SIDEBAR_PREFERRED_WIDTH,
 		onChange: () => syncSidebarWidthState()
 	});
 
@@ -310,6 +322,14 @@ function getSidebarMinWidth() {
 	return Math.round(getNumberSetting(SIDEBAR_MIN_WIDTH_CONFIG_KEY, DEFAULT_SIDEBAR_MIN_WIDTH, { min: 0 }));
 }
 
+function getSidebarPreferredWidth() {
+	return Math.round(getNumberSetting(
+		SIDEBAR_PREFERRED_WIDTH_CONFIG_KEY,
+		DEFAULT_SIDEBAR_PREFERRED_WIDTH,
+		{ min: 0 }
+	));
+}
+
 function getSidebarEmbedScale() {
 	return getNumberSetting(SIDEBAR_EMBED_SCALE_CONFIG_KEY, DEFAULT_SIDEBAR_EMBED_SCALE, {
 		min: MIN_SIDEBAR_EMBED_SCALE
@@ -471,6 +491,7 @@ function syncSidebarWidthVariable(root, shouldWide) {
 	const targetWidth = calculateSidebarTargetWidth({
 		currentWidth,
 		viewportWidth: getViewportWidth(),
+		preferredWidth: getSidebarPreferredWidth(),
 		horizontalChromeWidth,
 		uiScale,
 		minUsefulWidth: getSidebarMinWidth()

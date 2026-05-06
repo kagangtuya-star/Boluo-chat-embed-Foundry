@@ -35,8 +35,10 @@ test("MainUI syncs sidebar width from native v13 sidebar content metrics", () =>
 
 test("MainUI registers sidebar width and embed scale settings", () => {
 	assert.match(source, /SIDEBAR_MIN_WIDTH_CONFIG_KEY/);
+	assert.match(source, /SIDEBAR_PREFERRED_WIDTH_CONFIG_KEY/);
 	assert.match(source, /SIDEBAR_EMBED_SCALE_CONFIG_KEY/);
 	assert.match(source, /sidebarMinWidth/);
+	assert.match(source, /sidebarPreferredWidth/);
 	assert.match(source, /sidebarEmbedScale/);
 	assert.match(source, /game\.settings\.register\(MODULE_NAMESPACE, SIDEBAR_EMBED_SCALE_CONFIG_KEY,[\s\S]*?onChange: \(\) => syncSidebarWidthState\(\)/);
 });

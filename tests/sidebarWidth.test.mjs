@@ -43,7 +43,7 @@ test("calculateSidebarTargetWidth converts transformed chrome width back to logi
 	);
 });
 
-test("calculateSidebarTargetWidth uses wider default preferred width for v13 sidebar embeds", () => {
+test("calculateSidebarTargetWidth still respects default min width when preferred width is lower", () => {
 	assert.equal(
 		calculateSidebarTargetWidth({
 			currentWidth: 336,
@@ -51,7 +51,7 @@ test("calculateSidebarTargetWidth uses wider default preferred width for v13 sid
 			horizontalChromeWidth: 34.2,
 			uiScale: 0.95
 		}),
-		456
+		396
 	);
 });
 
@@ -79,5 +79,18 @@ test("calculateSidebarTargetWidth ignores embed content scale when sidebar width
 			contentScale: 1.2
 		}),
 		432
+	);
+});
+
+test("calculateSidebarTargetWidth honors caller supplied preferredWidth", () => {
+	assert.equal(
+		calculateSidebarTargetWidth({
+			currentWidth: 280,
+			preferredWidth: 500,
+			minUsefulWidth: 360,
+			viewportWidth: 1440,
+			horizontalChromeWidth: 12
+		}),
+		512
 	);
 });
