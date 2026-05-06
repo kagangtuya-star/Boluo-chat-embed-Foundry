@@ -20,6 +20,8 @@ const LEGACY_NAMESPACE = "embedded-webpage";
 const EMBEDDED_URL_CONFIG_KEY = "embeddedUrl";
 const TAB_TITLE_CONFIG_KEY = "tabTitle";
 const TAB_ICON_CONFIG_KEY = "tabIcon";
+const SIDEBAR_MIN_WIDTH_CONFIG_KEY = "sidebarMinWidth";
+const SIDEBAR_EMBED_SCALE_CONFIG_KEY = "sidebarEmbedScale";
 const DIALOGUE_ENABLED_CONFIG_KEY = "dialogueEnabled";
 const DIALOGUE_TYPE_SPEED_CONFIG_KEY = "dialogueTypeSpeed";
 const DIALOGUE_FONT_SIZE_CONFIG_KEY = "dialogueFontSize";
@@ -42,9 +44,13 @@ const SIDEBAR_CONTENT_ID = "sidebar-content";
 const MOBILE_MODE_PARAM_KEY = "mobile";
 const EMBED_IFRAME_CLASS = "boluo-chat-iframe";
 const EMBED_IFRAME_READY_CLASS = "boluo-iframe-ready";
+const SIDEBAR_EMBED_VIEWPORT_CLASS = "boluo-embed-viewport";
 const DEFAULT_EMBEDDED_URL = "https://app.boluo.chat/zh-CN";
 const DEFAULT_TAB_TITLE = "菠萝聊天";
 const DEFAULT_TAB_ICON = "fa-lemon";
+const DEFAULT_SIDEBAR_MIN_WIDTH = 360;
+const DEFAULT_SIDEBAR_EMBED_SCALE = 1;
+const MIN_SIDEBAR_EMBED_SCALE = 0.25;
 const ICON_STYLE_CLASSES = new Set(["fa-solid", "fa-regular", "fa-brands", "fa-light", "fa-thin", "fa-duotone"]);
 const ICON_MODIFIER_CLASSES = new Set(["fa-fw", "fa-spin", "fa-pulse", "fa-border", "fa-inverse", "fa-ul", "fa-li"]);
 
@@ -88,6 +94,26 @@ async function registerSettings() {
 		type: String,
 		default: DEFAULT_TAB_ICON,
 		onChange: () => updateTabPresentation()
+	});
+
+	game.settings.register(MODULE_NAMESPACE, SIDEBAR_MIN_WIDTH_CONFIG_KEY, {
+		name: "侧栏最小宽度",
+		hint: "当前用户激活菠萝标签时的最小侧栏宽度（像素）。",
+		scope: "client",
+		config: true,
+		type: Number,
+		default: DEFAULT_SIDEBAR_MIN_WIDTH,
+		onChange: () => syncSidebarWidthState()
+	});
+
+	game.settings.register(MODULE_NAMESPACE, SIDEBAR_EMBED_SCALE_CONFIG_KEY, {
+		name: "侧栏内容缩放比例",
+		hint: "当前用户的菠萝侧栏内容缩放比例，例如 0.9、1、1.1。",
+		scope: "client",
+		config: true,
+		type: Number,
+		default: DEFAULT_SIDEBAR_EMBED_SCALE,
+		onChange: () => syncSidebarWidthState()
 	});
 
 	game.settings.register(MODULE_NAMESPACE, DIALOGUE_ENABLED_CONFIG_KEY, {
@@ -262,6 +288,34 @@ function getDialogueClientSettings() {
 	});
 }
 
+/**
+ * 读取数值设置，异常或非法时回退默认值
+ * @param {string} key
+ * @param {number} fallback
+ * @param {{min?: number}} [options]
+ * @returns {number}
+ */
+function getNumberSetting(key, fallback, options = {}) {
+	const { min = Number.NEGATIVE_INFINITY } = options;
+	try {
+		const value = Number(game.settings.get(MODULE_NAMESPACE, key));
+		if (!Number.isFinite(value)) return fallback;
+		return Math.max(min, value);
+	} catch (_error) {
+		return fallback;
+	}
+}
+
+function getSidebarMinWidth() {
+	return Math.round(getNumberSetting(SIDEBAR_MIN_WIDTH_CONFIG_KEY, DEFAULT_SIDEBAR_MIN_WIDTH, { min: 0 }));
+}
+
+function getSidebarEmbedScale() {
+	return getNumberSetting(SIDEBAR_EMBED_SCALE_CONFIG_KEY, DEFAULT_SIDEBAR_EMBED_SCALE, {
+		min: MIN_SIDEBAR_EMBED_SCALE
+	});
+}
+
 function syncDialogueSettingsFromGame() {
 	dialogueStore.setSettings({
 		dialogueEnabled: game.settings.get(MODULE_NAMESPACE, DIALOGUE_ENABLED_CONFIG_KEY),
@@ -418,7 +472,8 @@ function syncSidebarWidthVariable(root, shouldWide) {
 		currentWidth,
 		viewportWidth: getViewportWidth(),
 		horizontalChromeWidth,
-		uiScale
+		uiScale,
+		minUsefulWidth: getSidebarMinWidth()
 	});
 	const widthValue = `${Math.round(targetWidth)}px`;
 	for (const target of variableTargets) {
@@ -485,6 +540,10 @@ function getSidebarPanel() {
 
 function getSidebarIframe() {
 	return getSidebarPanel()?.querySelector?.(`#${SIDEBAR_IFRAME_ID}`) ?? document.getElementById(SIDEBAR_IFRAME_ID);
+}
+
+function getSidebarEmbedViewport(panel = getSidebarPanel()) {
+	return panel?.querySelector?.(`.${SIDEBAR_EMBED_VIEWPORT_CLASS}`) ?? null;
 }
 
 /**
@@ -656,6 +715,7 @@ function syncSidebarWidthState(root = getSidebarRoot()) {
 	const sidebarContent = getSidebarContentElement(root);
 	sidebarContent?.classList.toggle(SIDEBAR_WIDE_CLASS, shouldWide);
 	syncSidebarWidthVariable(root, shouldWide);
+	syncSidebarEmbedScale(root);
 }
 
 /**
@@ -811,6 +871,45 @@ function createSidebarPanelShell(referencePanel) {
 	return panel;
 }
 
+function createSidebarEmbedViewport() {
+	const viewport = document.createElement("div");
+	viewport.classList.add(SIDEBAR_EMBED_VIEWPORT_CLASS);
+	return viewport;
+}
+
+function ensureSidebarEmbedViewport(panel = getSidebarPanel()) {
+	if (!(panel instanceof HTMLElement)) return null;
+
+	let viewport = getSidebarEmbedViewport(panel);
+	let iframe = panel.querySelector(`#${SIDEBAR_IFRAME_ID}`);
+
+	if (!viewport) {
+		viewport = createSidebarEmbedViewport();
+		panel.appendChild(viewport);
+	}
+
+	if (!iframe) {
+		iframe = createEmbeddedIframe(SIDEBAR_IFRAME_ID);
+	}
+
+	if (iframe.parentElement !== viewport) {
+		viewport.appendChild(iframe);
+	}
+
+	return viewport;
+}
+
+function syncSidebarEmbedScale(root = getSidebarRoot()) {
+	const panel = getSidebarPanel() ?? ensureTabPanel(root);
+	const viewport = getSidebarEmbedViewport(panel) ?? ensureSidebarEmbedViewport(panel);
+	if (!viewport) return;
+
+	const scale = getSidebarEmbedScale();
+	const inverseScale = 1 / scale;
+	viewport.style.setProperty("--boluo-embed-scale", String(scale));
+	viewport.style.setProperty("--boluo-embed-inverse-scale", String(inverseScale));
+}
+
 /**
  * 将自定义面板插到原生 chat 面板后方，避免被 v13 侧栏 rail 覆盖。
  * @param {HTMLElement} panel
@@ -845,9 +944,7 @@ function ensureTabPanel(root = getSidebarRoot()) {
 			return existing;
 		}
 		insertSidebarPanel(existing, root, referencePanel);
-		if (!existing.querySelector(`#${SIDEBAR_IFRAME_ID}`)) {
-			existing.appendChild(createEmbeddedIframe(SIDEBAR_IFRAME_ID));
-		}
+		ensureSidebarEmbedViewport(existing);
 		return existing;
 	}
 
@@ -855,7 +952,7 @@ function ensureTabPanel(root = getSidebarRoot()) {
 	if (!containerRoot) return null;
 
 	const panel = createSidebarPanelShell(referencePanel);
-	panel.appendChild(createEmbeddedIframe(SIDEBAR_IFRAME_ID));
+	ensureSidebarEmbedViewport(panel);
 
 	insertSidebarPanel(panel, containerRoot, referencePanel);
 
@@ -942,6 +1039,7 @@ function ensureSidebarElements(root = getSidebarRoot()) {
 	panel.setAttribute("data-tab-group", groupValue);
 
 	refreshEmbeddedFrames();
+	syncSidebarEmbedScale(root);
 	syncSidebarWidthState(root);
 }
 

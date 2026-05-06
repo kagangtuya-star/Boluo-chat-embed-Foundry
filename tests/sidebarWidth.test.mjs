@@ -54,3 +54,30 @@ test("calculateSidebarTargetWidth uses wider default preferred width for v13 sid
 		456
 	);
 });
+
+test("calculateSidebarTargetWidth honors caller supplied minUsefulWidth", () => {
+	assert.equal(
+		calculateSidebarTargetWidth({
+			currentWidth: 280,
+			preferredWidth: 320,
+			minUsefulWidth: 520,
+			viewportWidth: 1440,
+			horizontalChromeWidth: 0
+		}),
+		520
+	);
+});
+
+test("calculateSidebarTargetWidth ignores embed content scale when sidebar width should stay fixed", () => {
+	assert.equal(
+		calculateSidebarTargetWidth({
+			currentWidth: 320,
+			preferredWidth: 420,
+			minUsefulWidth: 360,
+			viewportWidth: 1440,
+			horizontalChromeWidth: 12,
+			contentScale: 1.2
+		}),
+		432
+	);
+});

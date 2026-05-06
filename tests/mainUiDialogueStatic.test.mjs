@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 
 const source = readFileSync(new URL("../scripts/MainUI.js", import.meta.url), "utf8");
+const styles = readFileSync(new URL("../styles/module.css", import.meta.url), "utf8");
 
 test("MainUI registers dialogue settings", () => {
 	assert.match(source, /dialogueEnabled/);
@@ -30,6 +31,28 @@ test("MainUI syncs sidebar width from native v13 sidebar content metrics", () =>
 	assert.match(source, /uiScale/);
 	assert.match(source, /transitionend/);
 	assert.match(source, /sidebarContent\?\.classList\.toggle\(SIDEBAR_WIDE_CLASS, shouldWide\)/);
+});
+
+test("MainUI registers sidebar width and embed scale settings", () => {
+	assert.match(source, /SIDEBAR_MIN_WIDTH_CONFIG_KEY/);
+	assert.match(source, /SIDEBAR_EMBED_SCALE_CONFIG_KEY/);
+	assert.match(source, /sidebarMinWidth/);
+	assert.match(source, /sidebarEmbedScale/);
+	assert.match(source, /game\.settings\.register\(MODULE_NAMESPACE, SIDEBAR_EMBED_SCALE_CONFIG_KEY,[\s\S]*?onChange: \(\) => syncSidebarWidthState\(\)/);
+});
+
+test("MainUI creates sidebar embed viewport and syncs scale variables", () => {
+	assert.match(source, /boluo-embed-viewport/);
+	assert.match(source, /--boluo-embed-scale/);
+	assert.match(source, /--boluo-embed-inverse-scale/);
+});
+
+test("Sidebar embed iframe opts out of flex growth when scaled", () => {
+	assert.match(styles, /boluo-embed-viewport > iframe\.boluo-chat-iframe[^}]*flex: 0 0 auto/);
+});
+
+test("Sidebar embed viewport allows scrolling for enlarged content", () => {
+	assert.match(styles, /boluo-embed-viewport[^}]*overflow: auto/);
 });
 
 test("MainUI removes temporary sidebar diagnostics after fix is settled", () => {
