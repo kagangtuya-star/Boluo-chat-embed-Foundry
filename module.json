@@ -1,13 +1,13 @@
 {
   "id": "Boluo-chat-embed",
   "title": "菠萝文字团工具嵌入",
-  "description": "这个模组可以把菠萝跑团作为一个右侧控件栏嵌入，并提供右键悬浮功能。",
+  "description": "在 Foundry VTT 中嵌入菠萝跑团或 SealChat，支持侧栏与悬浮窗口、透明小剧场投影及多种 Internal Surface，并保留旧版 CRPG 对话框。",
   "authors": [
     {
       "name": "星尘"
     }
   ],
-  "version": "#{VERSION}#",
+  "version": "2.4.0",
   "compatibility": {
     "minimum": "10",
     "verified": "14"
