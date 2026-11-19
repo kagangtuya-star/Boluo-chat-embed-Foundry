@@ -2,6 +2,7 @@ import { loadAvatar } from "./avatarCache.mjs";
 import { normalizeDialoguePages } from "./formatting.mjs";
 import { DIALOGUE_CLIENT_DEFAULTS } from "./settings.mjs";
 import { countVisibleCharacters, sliceHtmlByVisibleCharacters } from "./typewriter.mjs";
+import { bindFloatingGesture } from "../floatingWindow.mjs";
 
 const MODULE_NAMESPACE = "Boluo-chat-embed";
 const TAB_ICON_SETTING_KEY = "tabIcon";
@@ -559,93 +560,25 @@ export class BoluoDialogueApplication extends Application {
 	}
 
 	bindDragHandleElement(handle, callbacks = {}) {
-		handle.addEventListener("pointerdown", (event) => {
-			event.preventDefault();
-			const startLeft = Number(this.position.left ?? 0);
-			const startTop = Number(this.position.top ?? 0);
-			const startX = event.clientX;
-			const startY = event.clientY;
-			let moved = false;
-
-			const move = (moveEvent) => {
-				const dx = moveEvent.clientX - startX;
-				const dy = moveEvent.clientY - startY;
-				if (!moved && (Math.abs(dx) > 2 || Math.abs(dy) > 2)) {
-					moved = true;
-				}
-
-				super.setPosition({
-					left: startLeft + dx,
-					top: startTop + dy
-				});
-			};
-
-			const finish = async () => {
-				document.removeEventListener("pointermove", move);
-				document.removeEventListener("pointerup", finish);
-				document.removeEventListener("pointercancel", finish);
-				await this.persistPositionToSettings();
+		bindFloatingGesture(handle, {
+			read: () => this.position,
+			write: (rect) => super.setPosition(rect),
+			scale: () => this.element?.[0]?.getBoundingClientRect().width / this.element?.[0]?.offsetWidth || 1,
+			finish: (moved) => {
 				callbacks.onFinish?.(moved);
-			};
-
-			document.addEventListener("pointermove", move);
-			document.addEventListener("pointerup", finish);
-			document.addEventListener("pointercancel", finish);
+				void this.persistPositionToSettings();
+			}
 		});
 	}
 
 	bindResizeHandles(root) {
 		root.querySelectorAll(".boluo-dialogue-resize-edge").forEach((edge) => {
-			edge.addEventListener("pointerdown", (event) => {
-				event.preventDefault();
-				event.stopPropagation();
-
-				const edgeName = edge.dataset.edge ?? "";
-				const startLeft = Number(this.position.left ?? 0);
-				const startTop = Number(this.position.top ?? 0);
-				const startWidth = Number(this.position.width ?? 640);
-				const startHeight = Number(this.position.height ?? 280);
-				const startX = event.clientX;
-				const startY = event.clientY;
-
-				const move = (moveEvent) => {
-					const dx = moveEvent.clientX - startX;
-					const dy = moveEvent.clientY - startY;
-					const next = {
-						left: startLeft,
-						top: startTop,
-						width: startWidth,
-						height: startHeight
-					};
-
-					if (edgeName === "left") {
-						next.left = startLeft + dx;
-						next.width = Math.max(320, startWidth - dx);
-					}
-					if (edgeName === "right" || edgeName === "corner") {
-						next.width = Math.max(320, startWidth + dx);
-					}
-					if (edgeName === "top") {
-						next.top = startTop + dy;
-						next.height = Math.max(180, startHeight - dy);
-					}
-					if (edgeName === "bottom" || edgeName === "corner") {
-						next.height = Math.max(180, startHeight + dy);
-					}
-
-					super.setPosition(next);
-				};
-
-				const finish = async () => {
-					document.removeEventListener("pointermove", move);
-					document.removeEventListener("pointerup", finish);
-					document.removeEventListener("pointercancel", finish);
-					await this.persistPositionToSettings();
-				};
-
-				document.addEventListener("pointermove", move);
-				document.addEventListener("pointerup", finish);
-				document.addEventListener("pointercancel", finish);
+			bindFloatingGesture(edge, {
+				read: () => this.position,
+				write: (rect) => super.setPosition(rect),
+				edge: edge.dataset.edge,
+				scale: () => this.element?.[0]?.getBoundingClientRect().width / this.element?.[0]?.offsetWidth || 1,
+				finish: () => { void this.persistPositionToSettings(); }
 			});
 		});
 	}

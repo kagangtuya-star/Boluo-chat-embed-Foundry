@@ -14,6 +14,7 @@ import {
 	normalizeDialogueClientSettings
 } from "./dialogue/settings.mjs";
 import { syncDialogueApplication } from "./dialogue/app.mjs";
+import { syncSurfaceController, updateSurfaceContext } from "./surfaces/controller.mjs";
 
 const MODULE_NAMESPACE = "Boluo-chat-embed";
 const LEGACY_NAMESPACE = "embedded-webpage";
@@ -129,13 +130,13 @@ async function registerSettings() {
 	});
 
 	game.settings.register(MODULE_NAMESPACE, DIALOGUE_ENABLED_CONFIG_KEY, {
-		name: "启用 CRPG 对话框",
-		hint: "根据 SealChat 当前频道 IC 消息播放剧情对话框。",
+		name: "启用旧版 CRPG 对话框",
+		hint: "仅在投影入口选择旧版 CRPG 时生效，根据当前频道 IC 消息播放。",
 		scope: "world",
 		config: true,
 		type: Boolean,
 		default: DIALOGUE_WORLD_DEFAULTS.dialogueEnabled,
-		onChange: () => syncDialogueSettingsFromGame()
+		onChange: () => syncPresentationSettings()
 	});
 
 	game.settings.register(MODULE_NAMESPACE, DIALOGUE_TYPE_SPEED_CONFIG_KEY, {
@@ -268,6 +269,26 @@ async function registerSettings() {
 		onChange: () => syncDialogueSettingsFromGame()
 	});
 
+	game.settings.register(MODULE_NAMESPACE, "surface-mode", {
+		name: "投影入口",
+		hint: "默认显示折叠的 SealChat 投影控制器，可选择小剧场及其他独立界面。",
+		scope: "client", config: true, type: String, default: "surfaces",
+		choices: { surfaces: "SealChat 投影控制器", legacy: "旧版 CRPG 对话框", off: "关闭" },
+		onChange: () => syncPresentationSettings()
+	});
+	for (const [key, name, hint, defaultValue] of [
+		["theater-transparent", "小剧场透明背景", "隐藏舞台底色与场景背景层，保留立绘、前景和对白。", true],
+		["theater-full", "小剧场全功能", "默认仅展示；开启后按 SealChat 账号权限显示标准工具栏和聊天区。", false]
+	]) {
+		game.settings.register(MODULE_NAMESPACE, key, {
+			name, hint, scope: "client", config: true, type: Boolean, default: defaultValue,
+			onChange: () => syncSurfaceController()
+		});
+	}
+	game.settings.register(MODULE_NAMESPACE, "surface-state", {
+		scope: "client", config: false, type: Object, default: { items: [], launcher: { left: 88, top: 56 } }
+	});
+
 	if (!game.settings.settings.has(`${LEGACY_NAMESPACE}.${EMBEDDED_URL_CONFIG_KEY}`)) {
 		game.settings.register(LEGACY_NAMESPACE, EMBEDDED_URL_CONFIG_KEY, {
 			scope: "world",
@@ -338,7 +359,8 @@ function getSidebarEmbedScale() {
 
 function syncDialogueSettingsFromGame() {
 	dialogueStore.setSettings({
-		dialogueEnabled: game.settings.get(MODULE_NAMESPACE, DIALOGUE_ENABLED_CONFIG_KEY),
+		dialogueEnabled: game.settings.get(MODULE_NAMESPACE, "surface-mode") === "legacy"
+			&& game.settings.get(MODULE_NAMESPACE, DIALOGUE_ENABLED_CONFIG_KEY),
 		dialogueTypeSpeed: game.settings.get(MODULE_NAMESPACE, DIALOGUE_TYPE_SPEED_CONFIG_KEY),
 		dialogueFontSize: game.settings.get(MODULE_NAMESPACE, DIALOGUE_FONT_SIZE_CONFIG_KEY),
 		dialogueWaitSeconds: game.settings.get(MODULE_NAMESPACE, DIALOGUE_WAIT_SECONDS_CONFIG_KEY),
@@ -346,6 +368,18 @@ function syncDialogueSettingsFromGame() {
 		...getDialogueClientSettings()
 	});
 	syncDialogueApplication();
+}
+
+function needsBridge() {
+	return game.settings.get(MODULE_NAMESPACE, "surface-mode") === "surfaces"
+		|| dialogueStore.getState().settings.dialogueEnabled;
+}
+
+function syncPresentationSettings() {
+	syncDialogueSettingsFromGame();
+	syncSurfaceController();
+	if (needsBridge()) startBridgeHandshakePolling();
+	else { clearBridgeHandshakeTimer(); sendBridgeUnsubscribe(); }
 }
 
 /**
@@ -1139,7 +1173,8 @@ function createEmbeddedIframe(elementId) {
 	setIframeLoadingState(iframe, true);
 	iframe.addEventListener("load", () => {
 		setIframeLoadingState(iframe, false);
-		if (dialogueStore.getState().settings.dialogueEnabled) {
+		updateSurfaceContext(null);
+		if (needsBridge()) {
 			startBridgeHandshakePolling(iframe);
 		} else {
 			dialogueStore.setBridgeWaiting();
@@ -1157,7 +1192,7 @@ function clearBridgeHandshakeTimer() {
 }
 
 function sendBridgeHandshake(iframe = getSidebarIframe()) {
-	if (!iframe?.contentWindow || !dialogueStore.getState().settings.dialogueEnabled) {
+	if (!iframe?.contentWindow || !needsBridge()) {
 		return;
 	}
 
@@ -1176,8 +1211,9 @@ function startBridgeHandshakePolling(iframe = getSidebarIframe()) {
 	dialogueStore.setBridgeWaiting();
 	clearBridgeHandshakeTimer();
 	sendBridgeHandshake(iframe);
+	let attempts = 0;
 	bridgeHandshakeTimer = window.setInterval(() => {
-		if (dialogueStore.getState().bridgeReady) {
+		if (dialogueStore.getState().bridgeReady || ++attempts >= 30) {
 			clearBridgeHandshakeTimer();
 			return;
 		}
@@ -1191,6 +1227,9 @@ function handleBridgeMessage(event) {
 	if (event.source !== iframe?.contentWindow) {
 		return;
 	}
+	try {
+		if (event.origin !== new URL(iframe.src).origin) return;
+	} catch { return; }
 
 	const data = event.data;
 	if (!data || typeof data !== "object" || typeof data.type !== "string") {
@@ -1202,6 +1241,7 @@ function handleBridgeMessage(event) {
 	}
 
 	if (isHandshakeAckWithChannel(data)) {
+		updateSurfaceContext({ worldId: typeof data.worldId === "string" ? data.worldId : "", channelId: data.channelId });
 		dialogueStore.setBridgeReady({
 			worldId: typeof data.worldId === "string" ? data.worldId : "",
 			channelId: data.channelId
@@ -1209,6 +1249,10 @@ function handleBridgeMessage(event) {
 		syncDialogueApplication();
 		return;
 	}
+	if (data.type === "sealchat.bridge.roles.snapshot" && typeof data.worldId === "string" && typeof data.channelId === "string") {
+		updateSurfaceContext({ worldId: data.worldId, channelId: data.channelId });
+	}
+	if (!dialogueStore.getState().settings.dialogueEnabled) return;
 
 	const roles = readRolesSnapshot(data);
 	if (roles) {
@@ -1247,6 +1291,7 @@ function refreshEmbeddedFrames(options = {}) {
 	const shouldReload = forceReload || isFirstLoad || baseUrlChanged || mobileSessionChanged;
 
 	if (shouldReload && iframe.getAttribute("src") !== targetUrl) {
+		updateSurfaceContext(null);
 		sendBridgeUnsubscribe(iframe);
 		dialogueStore.setBridgeWaiting();
 		clearBridgeHandshakeTimer();
@@ -1284,7 +1329,7 @@ Hooks.once("init", async () => {
 Hooks.once("ready", async () => {
 	// 首次渲染侧栏元素
 	ensureSidebarElements();
-	syncDialogueSettingsFromGame();
+	syncPresentationSettings();
 
 	if (!bridgeMessageListenerBound) {
 		window.addEventListener("message", handleBridgeMessage);

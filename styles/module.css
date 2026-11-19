@@ -82,6 +82,156 @@ iframe.boluo-chat-iframe.boluo-iframe-ready {
 	opacity: 1;
 }
 
+/* 独立屏幕浮层：不继承 Foundry 窗口的背景或颜色方案。 */
+.boluo-surface-controller,
+.boluo-surface-window {
+	position: fixed;
+	box-sizing: border-box;
+	font: 13px/1.5 var(--font-primary, sans-serif);
+	color: #f3f1eb;
+	color-scheme: dark;
+	mix-blend-mode: normal;
+}
+
+.boluo-surface-controller { z-index: 100000; width: 48px; }
+.boluo-surface-controller *, .boluo-surface-window * { box-sizing: border-box; }
+.boluo-surface-controller [hidden], .boluo-surface-window[hidden] { display: none !important; }
+.boluo-surface-controller[data-expanded="true"] > .boluo-surface-launcher { display: none; }
+
+.boluo-surface-controller button,
+.boluo-surface-window button {
+	width: auto;
+	min-height: 28px;
+	margin: 0;
+	padding: 3px 8px;
+	border: 0;
+	border-radius: 5px;
+	background: transparent;
+	color: inherit;
+	font: inherit;
+	line-height: 1.5;
+	box-shadow: none;
+	cursor: pointer;
+	transition: background 120ms ease;
+}
+
+.boluo-surface-controller button:hover,
+.boluo-surface-window button:hover { background: #ffffff18; }
+.boluo-surface-controller :focus-visible,
+.boluo-surface-window button:focus-visible { outline: 2px solid #c2d9a0; outline-offset: 2px; }
+.boluo-surface-controller .boluo-surface-launcher {
+	width: 48px;
+	height: 48px;
+	border: 1px solid #ffffff28;
+	border-radius: 14px;
+	background: #202321f2;
+	color: #c2d9a0;
+	font-size: 28px;
+	box-shadow: 0 6px 20px #0005;
+	touch-action: none;
+}
+
+.boluo-surface-menu {
+	width: min(340px, calc(100vw - 16px));
+	overflow: auto;
+	padding: 16px;
+	border: 1px solid #ffffff22;
+	border-radius: 12px;
+	background: #202321f7;
+	box-shadow: 0 12px 36px #0006;
+	animation: boluo-surface-reveal 140ms ease-out;
+}
+
+.boluo-surface-menu-header, .boluo-surface-row, .boluo-surface-window-header {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+}
+.boluo-surface-menu-header { justify-content: space-between; cursor: move; touch-action: none; }
+.boluo-surface-menu-header strong { font-size: 16px; letter-spacing: .02em; }
+.boluo-surface-context, .boluo-surface-hint { margin: 8px 0 12px; color: #b0b7ae; font-size: 12px; }
+.boluo-surface-form { display: grid; gap: 12px; }
+.boluo-surface-form > label { display: grid; gap: 5px; }
+.boluo-surface-form input[type="url"], .boluo-surface-form select {
+	width: 100%;
+	height: 34px;
+	padding: 5px 8px;
+	border: 1px solid #ffffff26;
+	border-radius: 5px;
+	background: #141714;
+	color: #f3f1eb;
+	font: inherit;
+}
+.boluo-surface-options { display: flex; gap: 18px; margin: 0; padding: 8px 0 0; border: 0; }
+.boluo-surface-options legend { padding: 0; font-size: 12px; color: #b0b7ae; }
+.boluo-surface-options label { display: flex; align-items: center; gap: 6px; white-space: nowrap; }
+.boluo-surface-options input { width: 15px; height: 15px; margin: 0; accent-color: #c2d9a0; }
+.boluo-surface-controller .boluo-surface-primary { min-height: 36px; background: #c2d9a0; color: #1c2816; font-weight: 600; }
+.boluo-surface-controller .boluo-surface-primary:hover { background: #d1e4b5; }
+.boluo-surface-error { margin: 0; color: #ffb5a8; }
+.boluo-surface-error:empty { display: none; }
+.boluo-surface-menu h3 { margin: 18px 0 6px; border: 0; font-size: 12px; font-weight: 600; color: #b0b7ae; }
+.boluo-surface-row { padding: 6px 0; border-top: 1px solid #ffffff13; }
+.boluo-surface-resource { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.boluo-surface-menu > .boluo-surface-hint { margin-bottom: 0; }
+
+.boluo-surface-window {
+	display: flex;
+	flex-direction: column;
+	background: transparent;
+	border: 0;
+	box-shadow: none;
+}
+.boluo-surface-window::after {
+	content: "";
+	position: absolute;
+	inset: 0;
+	z-index: 3;
+	border: 1px solid #fff;
+	opacity: .08;
+	pointer-events: none;
+	transition: opacity 160ms ease;
+}
+.boluo-surface-window:is(:hover, :focus-within, .boluo-surface-moving)::after {
+	opacity: .5;
+}
+.boluo-surface-window-header {
+	flex: 0 0 30px;
+	min-height: 30px;
+	padding: 0 6px 0 10px;
+	background: transparent;
+	color: #fff;
+	opacity: .12;
+	transition: opacity 160ms ease;
+	cursor: move;
+	user-select: none;
+	touch-action: none;
+	pointer-events: auto;
+}
+.boluo-surface-window-header:is(:hover, :focus-within),
+.boluo-surface-moving .boluo-surface-window-header { opacity: .9; }
+.boluo-surface-title { flex: 1; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.boluo-surface-window button:hover { background: transparent; }
+.boluo-surface-window button:focus-visible { outline-color: #fff; }
+.boluo-surface-window button[aria-pressed="true"] { color: #fff; background: transparent; text-decoration: underline; text-underline-offset: 3px; }
+.boluo-surface-frame { display: block; flex: 1; width: 100%; min-height: 0; border: 0; outline: 0; background: transparent; }
+.boluo-surface-transparent { background: transparent; box-shadow: none; }
+.boluo-surface-pass-through { pointer-events: none; }
+.boluo-surface-pass-through .boluo-surface-frame, .boluo-surface-moving .boluo-surface-frame { pointer-events: none; }
+.boluo-surface-resize { position: absolute; z-index: 2; touch-action: none; pointer-events: auto; opacity: .12; transition: opacity 160ms ease; }
+.boluo-surface-resize:hover,
+.boluo-surface-moving .boluo-surface-resize { opacity: .9; }
+.boluo-surface-resize-left { left: 0; top: 30px; bottom: 0; width: 6px; cursor: ew-resize; }
+.boluo-surface-resize-right { right: 0; top: 30px; bottom: 0; width: 6px; cursor: ew-resize; }
+.boluo-surface-resize-top { top: 0; left: 0; right: 0; height: 5px; cursor: ns-resize; }
+.boluo-surface-resize-bottom { bottom: 0; left: 0; right: 0; height: 6px; cursor: ns-resize; }
+.boluo-surface-resize-corner { bottom: 0; right: 0; width: 16px; height: 16px; cursor: nwse-resize; border-right: 2px solid #fff; border-bottom: 2px solid #fff; }
+@keyframes boluo-surface-reveal { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: translateY(0); } }
+@media (prefers-reduced-motion: reduce) {
+	.boluo-surface-menu { animation: none; }
+	.boluo-surface-window-header, .boluo-surface-window::after, .boluo-surface-resize { transition: none; }
+}
+
 .application.boluo-dialogue-window,
 #boluo-dialogue-window {
 	background: transparent !important;
